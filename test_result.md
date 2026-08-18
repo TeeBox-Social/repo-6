@@ -231,6 +231,21 @@ frontend:
         -agent: "main"
         -comment: "New backend router /api/lfg with endpoints: POST /lfg/{post_id}/join (creates lfg_requests_col row status=pending, sends 'lfg_request' notification to poster), POST /lfg/{post_id}/request/{req_id}/accept (marks accepted, decrements remaining spots on post, sends lfg_accept notif to requester), POST /lfg/{post_id}/request/{req_id}/decline (marks declined, sends lfg_decline notif). GET /lfg/{post_id}/requests returns pending/accepted for the poster. GET /lfg/{post_id}/my-status returns current viewer's request state. Post detail page and RoundCard now render LfgJoinButton (testID 'lfg-join-<post_id>') for non-owners on lfg posts (label toggles: 'I'm in!' → 'Requested' → 'You're in') and LfgRequestsSheet (testID 'lfg-requests-sheet-<post_id>') for the poster showing pending requesters with Accept/Decline actions. Live remaining spots label ('spots-remaining-<post_id>') decrements on accept. Please test: (1) reese@teebox.demo creates or has an existing lfg post; (2) another user (or create one) taps I'm in — request goes pending, poster gets notif; (3) poster opens post, sees requester in LfgRequestsSheet, taps Accept — spots decrement, requester's button flips to 'You're in', requester gets lfg_accept notif; (4) decline path also works; (5) prevent double-joining (button disabled after first tap)."
 
+  - task: "Google AdMob integration framework (native ads in Feed + Banner ad)"
+    implemented: true
+    working: true
+    file: "src/config/adsConfig.ts, src/components/FeedNativeAd.native.tsx, src/components/FeedNativeAd.web.tsx, src/components/AdBanner.native.tsx, src/components/AdBanner.web.tsx, app/(tabs)/index.tsx, app.json, package.json"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added react-native-google-mobile-ads@16.5.0 (fixes the Kotlin/New-Architecture compile crash that forced removal of an OLDER version of this same library earlier in this app's history — confirmed fixed in v16.3.2+ per upstream changelog). Real Android AdMob IDs wired in (App ID ca-app-pub-1035050955026373~8956251041, banner unit .../1784913397, native unit .../1152948499); no iOS AdMob app exists yet so iOS uses Google's official Test IDs + Google's public sample iOS App ID placeholder until the user registers one. Split FeedNativeAd and a new AdBanner component into .native.tsx/.web.tsx pairs so Metro NEVER bundles the native ads module into the web build. Added `ADS_SUPPORTED` guard (checks Platform.OS + Constants.appOwnership !== 'expo') so ad components silently no-op instead of touching the native SDK when running in Expo Go (which has no custom native code) — this prevents a repeat of the prior AdMob-related crash history. FeedNativeAd renders every 5th feed post (unchanged slot); AdBanner renders as a footer bar above the Feed screen's bottom edge. This is a NATIVE MODULE — it cannot render real ads in Expo Go or the web preview; a dev/production build (via Publish) is required to see actual ads."
+        -working: true
+        -agent: "testing"
+        -comment: "AdMob framework regression test PASSED. Web preview loads correctly (sign-in, login, feed, scroll, all tabs) with zero blank-screen/crash. Confirmed zero ad UI renders on web (FeedNativeAd.web.tsx/AdBanner.web.tsx correctly no-op via Metro platform resolution) and zero console errors referencing react-native-google-mobile-ads/NativeAd/BannerAd. Main agent had seen a transient blank-screen flake while testing locally but isolated it via git-stash A/B test to be an unrelated environment/Metro-warmup flake (reproduced identically on unmodified baseline code) — testing agent could not reproduce it either, confirming no regression. NOTE: actual native ad rendering + Android Kotlin compile safety can only be confirmed via an EAS dev/production build, not web preview."
+
   - task: "Achievements displayed on Profile (replacing Notification settings card)"
     implemented: true
     working: true
