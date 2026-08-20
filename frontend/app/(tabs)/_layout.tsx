@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius } from '@/src/theme';
 
 import { makeThemedSheet } from '@/src/theme';
@@ -9,6 +10,15 @@ import { useTheme } from '@/src/theme-context';
 import { emitFeedRefresh } from '@/src/utils/feedBus';
 export default function TabsLayout() {
   useTheme();
+  const insets = useSafeAreaInsets();
+  // Base bar height (icons + labels + top padding); add the OS's bottom safe
+  // inset so 3-button nav Android phones and iPhone home-indicators never
+  // overlap the tab buttons.
+  const baseBarHeight = 60;
+  const dynamicTabBarStyle = {
+    height: baseBarHeight + insets.bottom,
+    paddingBottom: insets.bottom,
+  };
   return (
     <Tabs
       screenOptions={{
@@ -16,7 +26,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.brandPrimary,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, dynamicTabBarStyle],
         tabBarBackground: () =>
           Platform.OS === 'ios' ? (
             <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFill} />
@@ -87,7 +97,6 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     web: {
       position: 'absolute',
       borderTopWidth: 0,
-      height: 68,
       paddingTop: 6,
       backgroundColor: 'transparent',
       borderTopColor: 'transparent',
@@ -96,7 +105,6 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     default: {
       position: 'absolute',
       borderTopWidth: 0,
-      height: Platform.OS === 'ios' ? 88 : 68,
       paddingTop: 6,
       backgroundColor: 'transparent',
       borderTopColor: 'transparent',
