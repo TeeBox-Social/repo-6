@@ -307,11 +307,53 @@ export const api = {
     }>>(
       `/courses/search?q=${encodeURIComponent(q)}${coords ? `&lat=${coords.lat}&lng=${coords.lng}` : ''}`,
     ),
-  submitCourse: (payload: { name: string; par: number; city?: string; region?: string; country?: string }) =>
+  submitCourse: (payload: {
+    name: string;
+    par: number;
+    address?: string;
+    city?: string;
+    region?: string;
+    country?: string;
+    website?: string;
+    phone?: string;
+    num_holes?: number;
+    architect?: string;
+    year_built?: number;
+  }) =>
     request<{ course: any; created: boolean }>('/courses', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  myCourseSubmissions: () =>
+    request<Array<{
+      id: string; name: string; par?: number | null; address?: string | null;
+      city?: string | null; region?: string | null; country?: string | null;
+      website?: string | null; phone?: string | null;
+      status: 'pending' | 'approved' | 'rejected'; rejected_reason?: string | null; created_at: string;
+    }>>('/courses/submissions/mine'),
+
+  // ---- Suggested edits to existing courses ----
+  submitCourseEditRequest: (payload: {
+    course_name: string;
+    par?: number;
+    address?: string;
+    city?: string;
+    region?: string;
+    country?: string;
+    website?: string;
+    phone?: string;
+    num_holes?: number;
+    architect?: string;
+    year_built?: number;
+    note?: string;
+  }) =>
+    request<any>('/courses/edit-requests', { method: 'POST', body: JSON.stringify(payload) }),
+  myCourseEditRequests: () =>
+    request<Array<{
+      id: string; course_name: string; proposed_changes: Record<string, any>;
+      previous_values: Record<string, any>; note?: string | null;
+      status: 'pending' | 'approved' | 'rejected'; reason?: string | null; created_at: string;
+    }>>('/courses/edit-requests/mine'),
 
   // ---- Notifications ----
   listNotifications: () =>
@@ -360,6 +402,21 @@ export const api = {
     request<{ ok: boolean }>(`/admin/courses/${id}/verify`, { method: 'POST' }),
   adminRejectCourse: (id: string, reason: string) =>
     request<{ ok: boolean }>(`/admin/courses/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  // ---- Admin: pending course edit requests ----
+  adminListPendingCourseEdits: () =>
+    request<Array<{
+      id: string; course_name: string; proposed_changes: Record<string, any>;
+      previous_values: Record<string, any>; note?: string | null;
+      submitted_by_name?: string; created_at: string;
+    }>>('/admin/course-edits/pending'),
+  adminApproveCourseEdit: (id: string) =>
+    request<{ ok: boolean }>(`/admin/course-edits/${id}/approve`, { method: 'POST' }),
+  adminRejectCourseEdit: (id: string, reason: string) =>
+    request<{ ok: boolean }>(`/admin/course-edits/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),

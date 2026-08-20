@@ -101,13 +101,39 @@ class WishlistIn(BaseModel):
 class NewCourseIn(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     par: int = Field(ge=27, le=90)
+    address: Optional[str] = Field(default=None, max_length=200)
     city: Optional[str] = Field(default=None, max_length=80)
     region: Optional[str] = Field(default=None, max_length=80)
     country: Optional[str] = Field(default=None, max_length=60)
+    website: Optional[str] = Field(default=None, max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    num_holes: Optional[int] = Field(default=None, ge=1, le=36)
+    architect: Optional[str] = Field(default=None, max_length=120)
+    year_built: Optional[int] = Field(default=None, ge=1750, le=2100)
 
 
 class RejectIn(BaseModel):
     reason: Optional[str] = Field(default="", max_length=280)
+
+
+class CourseEditRequestIn(BaseModel):
+    """A user-suggested correction/enrichment to an existing course.
+
+    Only fields the user actually wants to change should be sent (anything
+    left as ``None`` is ignored server-side, and any field equal to the
+    course's current value is dropped before creating the review record)."""
+    course_name: str = Field(min_length=1, max_length=120)
+    par: Optional[int] = Field(default=None, ge=27, le=90)
+    address: Optional[str] = Field(default=None, max_length=200)
+    city: Optional[str] = Field(default=None, max_length=80)
+    region: Optional[str] = Field(default=None, max_length=80)
+    country: Optional[str] = Field(default=None, max_length=60)
+    website: Optional[str] = Field(default=None, max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    num_holes: Optional[int] = Field(default=None, ge=1, le=36)
+    architect: Optional[str] = Field(default=None, max_length=120)
+    year_built: Optional[int] = Field(default=None, ge=1750, le=2100)
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 class PurgeIn(BaseModel):

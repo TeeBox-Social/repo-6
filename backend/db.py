@@ -22,3 +22,4 @@ wishlists_col = db.wishlists
 import_jobs_col = db.import_jobs
 notifications_col = db.notifications
 lfg_interests_col = db.lfg_interests
+course_edit_requests_col = db.course_edit_requests

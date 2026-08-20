@@ -50,6 +50,7 @@ export default function AdminCoursesScreen() {
   const [activeJob, setActiveJob] = useState<ImportJob | null>(null);
   const [recentJobs, setRecentJobs] = useState<ImportJob[]>([]);
   const [pending, setPending] = useState<any[]>([]);
+  const [pendingEdits, setPendingEdits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [triggering, setTriggering] = useState(false);
@@ -57,10 +58,11 @@ export default function AdminCoursesScreen() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [s, list, pend] = await Promise.all([
+      const [s, list, pend, pendEdits] = await Promise.all([
         api.adminCourseStats(),
         api.adminListJobs(),
         api.adminListPendingCourses(),
+        api.adminListPendingCourseEdits(),
       ]);
       setStats({ total_courses: s.total_courses, by_source: s.by_source });
       const jobs = list.jobs || [];
@@ -68,6 +70,7 @@ export default function AdminCoursesScreen() {
       setActiveJob(running);
       setRecentJobs(jobs.filter((j) => j.id !== running?.id).slice(0, 8));
       setPending(pend || []);
+      setPendingEdits(pendEdits || []);
     } catch (e: any) {
       Alert.alert('Admin access required', e?.message || 'Only admins can view this page.');
       router.back();
@@ -332,6 +335,43 @@ export default function AdminCoursesScreen() {
           </View>
         ) : null}
 
+        {/* Pending edit requests for existing courses */}
+        {pendingEdits.length > 0 ? (
+          <View style={styles.section} testID="admin-pending-edits-section">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Text style={styles.sectionTitle}>Pending edit requests</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingEdits.length}</Text>
+              </View>
+            </View>
+            <Text style={styles.sectionSub}>
+              Golfers suggesting corrections to existing courses. Approving applies the changes immediately.
+            </Text>
+            {pendingEdits.map((e) => (
+              <PendingEditRow
+                key={e.id}
+                edit={e}
+                onApprove={async () => {
+                  try {
+                    await api.adminApproveCourseEdit(e.id);
+                    setPendingEdits((p) => p.filter((x) => x.id !== e.id));
+                  } catch (err: any) {
+                    Alert.alert('Could not approve', err?.message || 'Try again');
+                  }
+                }}
+                onReject={async (reason) => {
+                  try {
+                    await api.adminRejectCourseEdit(e.id, reason);
+                    setPendingEdits((p) => p.filter((x) => x.id !== e.id));
+                  } catch (err: any) {
+                    Alert.alert('Could not reject', err?.message || 'Try again');
+                  }
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+
         {/* Country picker */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Import a single country</Text>
@@ -401,6 +441,19 @@ export default function AdminCoursesScreen() {
   );
 }
 
+const EDIT_FIELD_LABELS: Record<string, string> = {
+  par: 'Par',
+  address: 'Address',
+  city: 'City',
+  region: 'Region/State',
+  country: 'Country',
+  website: 'Website',
+  phone: 'Phone',
+  num_holes: 'Number of holes',
+  architect: 'Architect',
+  year_built: 'Year built',
+};
+
 function PendingCourseRow({
   course,
   onApprove,
@@ -450,6 +503,12 @@ function PendingCourseRow({
             {[course.city, course.region, course.country].filter(Boolean).join(', ')}
           </Text>
         ) : null}
+        {course.address ? <Text style={styles.pendingMeta}>{course.address}</Text> : null}
+        {course.website || course.phone ? (
+          <Text style={styles.pendingMeta}>
+            {[course.website, course.phone].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
         {course.round_count > 0 ? (
           <Text style={styles.pendingUsage}>{course.round_count} round(s) logged here</Text>
         ) : null}
@@ -459,6 +518,68 @@ function PendingCourseRow({
           <Ionicons name="checkmark" size={16} color="#fff" />
         </Pressable>
         <Pressable onPress={promptReject} style={styles.rejectBtn} testID={`admin-pending-reject-${course.id}`}>
+          <Ionicons name="close" size={16} color="#fff" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function PendingEditRow({
+  edit,
+  onApprove,
+  onReject,
+}: {
+  edit: any;
+  onApprove: () => Promise<void>;
+  onReject: (reason: string) => Promise<void>;
+}) {
+  const promptReject = () => {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Reject this edit suggestion?',
+        'Optional reason (sent to the golfer as a notification).',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reject', style: 'destructive', onPress: (reason) => onReject((reason || '').trim()) },
+        ],
+        'plain-text',
+      );
+    } else {
+      Alert.alert(
+        'Reject this edit suggestion?',
+        'The golfer will be notified.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reject', style: 'destructive', onPress: () => onReject('') },
+        ],
+      );
+    }
+  };
+
+  const changes = Object.entries(edit.proposed_changes || {});
+  const previous = edit.previous_values || {};
+
+  return (
+    <View style={styles.pendingCard} testID={`admin-pending-edit-${edit.id}`}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.pendingName}>{edit.course_name}</Text>
+        <Text style={styles.pendingMeta}>Suggested by {edit.submitted_by_name || 'unknown'}</Text>
+        <View style={{ marginTop: 6, gap: 2 }}>
+          {changes.map(([field, val]) => (
+            <Text key={field} style={styles.pendingDiff}>
+              <Text style={{ fontWeight: '800' }}>{EDIT_FIELD_LABELS[field] || field}: </Text>
+              {String(previous[field] ?? '—')} {'→'} {String(val)}
+            </Text>
+          ))}
+        </View>
+        {edit.note ? <Text style={styles.pendingNote}>Note: {edit.note}</Text> : null}
+      </View>
+      <View style={styles.pendingActions}>
+        <Pressable onPress={onApprove} style={styles.approveBtn} testID={`admin-pending-edit-approve-${edit.id}`}>
+          <Ionicons name="checkmark" size={16} color="#fff" />
+        </Pressable>
+        <Pressable onPress={promptReject} style={styles.rejectBtn} testID={`admin-pending-edit-reject-${edit.id}`}>
           <Ionicons name="close" size={16} color="#fff" />
         </Pressable>
       </View>
@@ -605,6 +726,8 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   pendingName: { fontSize: 15, fontWeight: '800', color: colors.onSurface },
   pendingMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
   pendingUsage: { fontSize: 11, color: colors.brandPrimary, fontWeight: '700', marginTop: 4 },
+  pendingDiff: { fontSize: 12, color: colors.onSurface },
+  pendingNote: { fontSize: 12, color: colors.muted, fontStyle: 'italic', marginTop: 6 },
   pendingActions: { flexDirection: 'row', gap: 8 },
   approveBtn: {
     width: 40,

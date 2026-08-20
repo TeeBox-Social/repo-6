@@ -1,0 +1,40 @@
+{
+  "summary": "Tested (1) Feed tap-to-refresh and (2) Course Edit Requests feature. Backend: 19/20 pytest passed. 1 real bug found: admin-approved edits to OpenGolfAPI-sourced courses (having external_id) get clobbered by the next GET /api/courses/{name} because _ensure_course_details() refetches and overwrites website/phone/address/etc. Frontend: Feed tap-to-refresh scrolls to top on already-focused Feed tab; Course Edit Requests page navigation from More tab works; Add a Course + Suggest an Edit + My Submissions tabs all functional with success banners.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/course-edits/{id}/approve  +  GET /api/courses/{name}",
+        "issue": "Approved course-edit changes are silently reverted when the course has an external_id. admin_approve_course_edit correctly $set's proposed_changes onto the course doc, but the very next GET /api/courses/{name} calls _ensure_course_details() (routers/courses.py:100) which — when the cached OpenGolfAPI detail is not considered fresh (missing holes, or detail_external_id mismatch, or TTL expired) — re-fetches the course from OpenGolfAPI and overwrites the just-approved fields (website/phone/address/architect/year_built/par/num_holes/etc.). Reproduced: submitted edit to course 'Cimarron Golf Club Pebble Par 3 Course' setting website='https://example.com/eca181'; admin approve returned {ok:true} and DB was updated (updated_at 13:09:29.230); 1.7s later the details_synced_at was 13:09:30.986 and website was back to 'http://www.cimarrongolf.com/'. Fix suggestion: track a `manually_edited_fields` set (or `last_admin_edit_at`) on the course doc so _ensure_course_details() skips overwriting fields that an admin explicitly changed.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter32_course_edit_requests.py",
+    "/app/test_reports/pytest/iter32_results.xml"
+  ],
+  "action_items": [
+    "Fix the OpenGolfAPI detail-cache override that reverts admin-approved course edits on courses with external_id. Options: (a) after applying proposed_changes, also update details_synced_at + detail_external_id and set holes to a non-empty sentinel so _ensure_course_details() treats the cache as fresh; (b) preferred: record which fields were touched by an admin edit and have _ensure_course_details() diff-merge (never clobber admin-set fields); (c) simplest: if course source == 'opengolfapi' AND an approved edit exists, skip _ensure_course_details() entirely for that course.",
+    "(Optional polish) Consider auto-notifying the submitter with a 'course_edit_approved' notification even when the pref 'course_verified' is off — the current design gates approval notifications behind course_verified, which is documented, but may surprise users who muted general course-verification notifs and still want to hear about their own edit outcomes.",
+    "Note about the review request phrasing: it referenced POST /api/courses/{id}/edit-requests, POST /api/courses/edit-requests (new-course path), POST /api/admin/courses/edit-requests/{id}/verify|reject. Actual implemented routes are: POST /api/courses/edit-requests (edit an existing course), POST /api/courses (add a new course), GET /api/admin/course-edits/pending, POST /api/admin/course-edits/{id}/approve, POST /api/admin/course-edits/{id}/reject. Tests were run against the actual implemented routes."
+  ],
+  "critical_code_review_comments": [
+    "backend/routers/courses.py _ensure_course_details() is a hidden mutation on GET — it silently overwrites persisted course fields. Any code path that writes to a course doc must be aware this refetch can undo their work. Consider making detail-sync explicit / opt-in.",
+    "backend/routers/courses.py my_course_submissions maps `verified == True` -> approved, but a course with review_status='approved' but verified still False (transient) would be miscategorized. Currently harmless due to verify endpoint setting both simultaneously.",
+    "app/course-edit-requests.tsx: line 341 filters search hits by `h.verified` client-side. If backend already excludes rejected + honors verified filter, this is fine — but a course that was locally submitted by the current user is returned by /api/courses/search even when unverified (submitted_by_me flag); this will silently disappear here, which is intended per copy ('Only courses already in TeeBox can get edit suggestions')."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "95% (19/20)", "frontend": "100% (5/5 flows)"},
+  "seed_data_creation": "Created via API during test: 1 new-course submission (TEST_NewCourse_*) + UI (TEST_UI_Course_*); 2 pending edit requests on Pebble/Cimarron course (one approve, one reject) + 1 edit via UI. All prefixed TEST_ or use example.com URLs for cleanup.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent fixes the _ensure_course_details clobber bug, re-run backend/tests/test_iter32_course_edit_requests.py — the single failing test test_course_updated_after_approve should then pass. All other admin/user/notification/role-gate paths already verified. Frontend paths verified via Playwright at 390x844: More→Course Edit Requests navigation works; cer-tab-add/edit/mine tabs all functional; success banners appear; search returns hits; submission POSTs go through and appear in My Submissions.",
+  "rca_of_issue": "RCA of approved-edit revert bug: (1) POST /api/admin/course-edits/{id}/approve applies $set(proposed_changes) to courses_col directly. (2) Client (or test) calls GET /api/courses/{name}. (3) get_course() → await _ensure_course_details(course). (4) course has external_id (OpenGolfAPI-sourced), and the freshness gate `synced && course.holes && course.detail_external_id == ext_id && age<30d` fails (in this case: detail was previously synced but courses table may not have had a matching detail_external_id, or holes was empty), so it re-fetches. (5) _ensure_course_details unconditionally writes website/phone/address/architect/year_built/par/num_holes/etc. from the OpenGolfAPI response back into the DB, overwriting the just-approved values. Repro: submitted approved-edit -> reviewed_at 13:09:29.230, DB updated then; 1.7s later details_synced_at=13:09:30.986 and website was reverted to the upstream OpenGolfAPI value. Mitigation: annotate course docs with admin-set fields (or last_admin_edit_at) and have _ensure_course_details either skip refresh or merge without overwriting those fields."
+}

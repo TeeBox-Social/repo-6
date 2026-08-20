@@ -51,6 +51,10 @@ function iconForType(type: string): { icon: any; color: string } {
       return { icon: 'alert-circle', color: '#c0392b' };
     case 'course_verified':
       return { icon: 'checkmark-done', color: colors.brandPrimary };
+    case 'course_edit_approved':
+      return { icon: 'checkmark-done', color: colors.brandPrimary };
+    case 'course_edit_rejected':
+      return { icon: 'alert-circle', color: '#c0392b' };
     case 'lfg_interest':
       return { icon: 'hand-right', color: colors.brandPrimary };
     case 'lfg_response':
@@ -75,6 +79,11 @@ function resolveNotificationTarget(n: Notification): string | null {
     case 'follow':
       return n.actor_id ? `/user/${n.actor_id}` : null;
     case 'course_verified':
+      return n.course_name ? `/course/${encodeURIComponent(n.course_name)}` : null;
+    case 'course_edit_approved':
+    case 'course_edit_rejected':
+      // Unlike a rejected new-course submission, the course itself still
+      // exists (only the suggested edit was declined) — link to it either way.
       return n.course_name ? `/course/${encodeURIComponent(n.course_name)}` : null;
     default:
       // e.g. course_rejected — the course record no longer exists to open.

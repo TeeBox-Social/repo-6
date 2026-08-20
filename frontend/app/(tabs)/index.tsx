@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { FeedNativeAd } from '@/src/components/FeedNativeAd';
 import { AdBanner } from '@/src/components/AdBanner';
 import { useAuth } from '@/src/auth-context';
 import { TBButton } from '@/src/components/TBButton';
+import { subscribeFeedRefresh } from '@/src/utils/feedBus';
 
 type FeedFilter = 'all' | 'round' | 'text' | 'lfg';
 const FILTERS: { key: FeedFilter; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -36,6 +37,7 @@ export default function Feed() {
   useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const listRef = useRef<FlatList<any>>(null);
   const [rounds, setRounds] = useState<any[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,19 @@ export default function Feed() {
     await load();
     setRefreshing(false);
   };
+
+  // Tapping the Feed tab while already on it scrolls back to the top and
+  // pulls the latest posts — matches the tab-bar "home" behaviour users
+  // expect from most social apps.
+  useEffect(() => {
+    const unsubscribe = subscribeFeedRefresh(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      onRefresh();
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const onLike = async (id: string) => {
     if (!rounds) return;
@@ -179,6 +194,7 @@ export default function Feed() {
       </View>
 
       <FlatList
+        ref={listRef}
         data={visibleRounds}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}

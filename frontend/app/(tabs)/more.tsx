@@ -109,6 +109,16 @@ export default function MoreScreen() {
           onPress={() => router.push('/profile/notifications' as any)}
         />
 
+        <MenuRow
+          testID="more-course-edit-requests"
+          icon="map-outline"
+          iconBg={colors.surfaceTertiary}
+          iconColor={colors.onSurface}
+          title="Course Edit Requests"
+          subtitle="Add a missing course or suggest a correction"
+          onPress={() => router.push('/course-edit-requests' as any)}
+        />
+
         {user?.is_admin ? (
           <MenuRow
             testID="more-admin"

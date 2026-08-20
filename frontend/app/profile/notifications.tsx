@@ -65,7 +65,7 @@ const ROWS: PrefRow[] = [
   {
     key: 'course_verified',
     title: 'Course approvals',
-    desc: 'When a course you submitted is approved (or rejected).',
+    desc: 'When a course you submitted — or an edit you suggested — is approved (or rejected).',
     icon: 'checkmark-done-outline',
   },
   {

@@ -89,7 +89,7 @@ export default function CourseDetail() {
 
   const openMaps = () => {
     const query = encodeURIComponent(
-      [courseName, info?.city, info?.region].filter(Boolean).join(' '),
+      info?.address || [courseName, info?.city, info?.region].filter(Boolean).join(' '),
     );
     const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
     Linking.openURL(url).catch(() => {});

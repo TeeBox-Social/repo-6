@@ -1,0 +1,32 @@
+{
+  "summary": "Focused re-test of the ONE HIGH-priority backend bug flagged in iteration 33: admin-approved course edits were silently reverted by _ensure_course_details() (and _cache_opengolf_compact) re-fetching from OpenGolfAPI on courses that have an external_id. FIX VERIFIED — 7/7 new targeted tests PASS against a real OpenGolfAPI-sourced course, and 9/9 iter32 approve-flow regression tests still PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter34_edit_persistence_opengolf.py",
+    "/app/test_reports/pytest/iter34_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is minimal and correctly scoped to the three write paths that could revert admin edits: admin_approve_course_edit ($addToSet manually_edited_fields with proposed change keys), _ensure_course_details (drops protected keys from the OpenGolfAPI-detail update dict), and _cache_opengolf_compact (drops protected keys from the search-cache upsert dict). No further code changes required.",
+    "manually_edited_fields is an append-only $addToSet array. If in future the admin flow gains a 'revert to upstream' action, remember to $pull the corresponding field name(s) from this array so _ensure_course_details is allowed to refresh them again.",
+    "The protected-field guard uses set() on course.get('manually_edited_fields') — safe against None/missing. Both write sites use identical semantics so behavior stays consistent whether the clobber attempt comes from GET /api/courses/{name} or /courses/search / /discover/courses / /discover/courses/nearby."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter34_edit_persistence_opengolf.py (new focused test file)"
+  ],
+  "success_rate": {"backend": "100% (7/7 iter34 + 9/9 iter32 approve-flow regression)", "frontend": "NA (backend-only re-test)"},
+  "seed_data_creation": "Two test edit-requests submitted+approved against a real OpenGolfAPI-sourced course (all values prefixed 'TEST' or use example.com URLs). After this run, the target course carries manually_edited_fields=['website','address'] and its website/address hold the TEST values — main agent may want to null them out or re-approve a revert if the demo course is user-facing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter33's single failing case (test_course_updated_after_approve on an OpenGolfAPI-sourced course) is now green. Both write paths that could revert an admin edit are protected (details refresh + search-cache upsert). If new endpoints are added that write to courses_col, apply the same manually_edited_fields filter. Test file /app/backend/tests/test_iter34_edit_persistence_opengolf.py can be re-run as a regression check anytime.",
+  "rca_of_issue": "Root cause was _ensure_course_details() unconditionally overwriting course fields with fresh OpenGolfAPI detail values on every re-fetch (TTL expiry, empty holes, or detail_external_id mismatch triggered a refresh). Fix records the set of admin-edited field names on the course doc (courses.manually_edited_fields, populated by admin_approve_course_edit via $addToSet) and both refresh sites (_ensure_course_details for GET-time detail sync, _cache_opengolf_compact for search-cache upsert) skip those fields when building their $set. Verified end-to-end: submit edit → approve → GET x3 (with search-cache refresh in between) → all three responses keep the admin-approved website+address; re-submitting the same values now returns 400 'No changes detected' proving they persisted."
+}

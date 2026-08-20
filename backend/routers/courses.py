@@ -9,9 +9,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 import opengolf_client
-from db import courses_col, reviews_col, rounds_col, users_col
+from db import course_edit_requests_col, courses_col, reviews_col, rounds_col, users_col
 from helpers import haversine_km, now_iso, safe_query
-from models import NewCourseIn, ReviewIn
+from models import CourseEditRequestIn, NewCourseIn, ReviewIn
 from security import get_current_user, limiter
 
 router = APIRouter()
@@ -45,7 +45,10 @@ async def _cache_opengolf_compact(c: dict) -> None:
         return
     clat, clng = c.get("lat"), c.get("lng")
     try:
-        existing = await courses_col.find_one({"name": name}, {"_id": 0, "lat": 1, "lng": 1, "external_id": 1})
+        existing = await courses_col.find_one(
+            {"name": name},
+            {"_id": 0, "lat": 1, "lng": 1, "external_id": 1, "manually_edited_fields": 1},
+        )
         if existing:
             elat, elng = existing.get("lat"), existing.get("lng")
             if elat is not None and elng is not None and clat is not None and clng is not None:
@@ -68,6 +71,12 @@ async def _cache_opengolf_compact(c: dict) -> None:
             "num_holes": c.get("holes"),
             "external_id": c.get("id"),
         }
+        # Never revert admin-approved manual edits during search-cache upsert.
+        protected = set((existing or {}).get("manually_edited_fields") or [])
+        if protected:
+            for field in list(set_fields.keys()):
+                if field in protected:
+                    set_fields.pop(field, None)
         old_external_id = existing.get("external_id") if existing else None
         new_external_id = c.get("id")
         if old_external_id and new_external_id and old_external_id != new_external_id:
@@ -161,6 +170,17 @@ async def _ensure_course_details(course: dict | None) -> dict | None:
         "details_synced_at": now_iso(),
         "detail_external_id": ext_id,
     }
+    # Preserve admin-approved manual edits: never overwrite fields that have
+    # been curated by our admins via the course-edit-request flow. Without
+    # this guard, the next re-fetch (post-TTL or after any admin approval
+    # invalidates cache) would silently revert the approved changes back to
+    # whatever OpenGolfAPI has.
+    protected = set(course.get("manually_edited_fields") or [])
+    if protected:
+        for field in list(update.keys()):
+            if field in protected:
+                # keep the existing (admin-approved) value on the course doc
+                update[field] = course.get(field)
     try:
         await courses_col.update_one({"name": course["name"]}, {"$set": update})
     except Exception as e:  # noqa: BLE001
@@ -218,7 +238,7 @@ async def discover_courses(q: str = "", lat: Optional[float] = None, lng: Option
     course_query: dict = {
         "$or": [
             {"verified": {"$ne": False}},
-            {"submitted_by": user["id"]},
+            {"submitted_by": user["id"], "review_status": {"$ne": "rejected"}},
         ]
     }
     if safe:
@@ -359,7 +379,7 @@ async def discover_courses_nearby(
         "lng": {"$gte": lng - d_lng, "$lte": lng + d_lng, "$ne": None},
         "$or": [
             {"verified": {"$ne": False}},
-            {"submitted_by": user["id"]},
+            {"submitted_by": user["id"], "review_status": {"$ne": "rejected"}},
         ],
     }
 
@@ -461,7 +481,7 @@ async def course_search(
         "name": {"$regex": safe, "$options": "i"},
         "$or": [
             {"verified": {"$ne": False}},
-            {"submitted_by": user["id"]},
+            {"submitted_by": user["id"], "review_status": {"$ne": "rejected"}},
         ],
     }
     seen_names = set()
@@ -543,13 +563,20 @@ async def submit_course(request: Request, data: NewCourseIn, user=Depends(get_cu
         "id": str(uuid.uuid4()),
         "name": name,
         "par": data.par,
+        "address": (data.address or "").strip() or None,
         "city": (data.city or "").strip() or None,
         "region": (data.region or "").strip() or None,
         "country": (data.country or "").strip() or None,
+        "website": (data.website or "").strip() or None,
+        "phone": (data.phone or "").strip() or None,
+        "num_holes": data.num_holes,
+        "architect": (data.architect or "").strip() or None,
+        "year_built": data.year_built,
         "lat": None,
         "lng": None,
         "source": "community",
         "verified": False,
+        "review_status": "pending",
         "submitted_by": user["id"],
         "submitted_by_name": user.get("display_name"),
         "created_at": now_iso(),
@@ -560,6 +587,91 @@ async def submit_course(request: Request, data: NewCourseIn, user=Depends(get_cu
         raise HTTPException(status_code=409, detail="A course with this name already exists")
     doc.pop("_id", None)
     return {"course": doc, "created": True}
+
+
+@router.get("/courses/submissions/mine")
+async def my_course_submissions(user=Depends(get_current_user)):
+    """History of new-course submissions this user has made, with review status."""
+    out = []
+    async for c in courses_col.find({"submitted_by": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50):
+        status = "approved" if c.get("verified") else ("rejected" if c.get("review_status") == "rejected" else "pending")
+        out.append({
+            "id": c.get("id"),
+            "name": c.get("name"),
+            "par": c.get("par"),
+            "address": c.get("address"),
+            "city": c.get("city"),
+            "region": c.get("region"),
+            "country": c.get("country"),
+            "website": c.get("website"),
+            "phone": c.get("phone"),
+            "status": status,
+            "rejected_reason": c.get("rejected_reason"),
+            "created_at": c.get("created_at"),
+        })
+    return out
+
+
+# ---- Suggested edits to existing courses ----
+_EDITABLE_COURSE_FIELDS = (
+    "par", "address", "city", "region", "country", "website", "phone",
+    "num_holes", "architect", "year_built",
+)
+
+
+@router.post("/courses/edit-requests")
+@limiter.limit("10/hour")
+async def submit_course_edit_request(request: Request, data: CourseEditRequestIn, user=Depends(get_current_user)):
+    name = data.course_name.strip()
+    course = await courses_col.find_one(
+        {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0},
+    )
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found. Use 'Add a course' if it's missing entirely.")
+
+    payload = data.dict()
+    proposed_changes: dict = {}
+    previous_values: dict = {}
+    for field in _EDITABLE_COURSE_FIELDS:
+        new_val = payload.get(field)
+        if isinstance(new_val, str):
+            new_val = new_val.strip() or None
+        if new_val is None:
+            continue
+        current_val = course.get(field)
+        if isinstance(current_val, str):
+            current_val = current_val.strip() or None
+        if new_val == current_val:
+            continue
+        proposed_changes[field] = new_val
+        previous_values[field] = current_val
+
+    if not proposed_changes:
+        raise HTTPException(status_code=400, detail="No changes detected. Adjust at least one field to submit an edit request.")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "course_id": course.get("id"),
+        "course_name": course["name"],
+        "proposed_changes": proposed_changes,
+        "previous_values": previous_values,
+        "note": (data.note or "").strip() or None,
+        "status": "pending",
+        "submitted_by": user["id"],
+        "submitted_by_name": user.get("display_name"),
+        "created_at": now_iso(),
+    }
+    await course_edit_requests_col.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@router.get("/courses/edit-requests/mine")
+async def my_course_edit_requests(user=Depends(get_current_user)):
+    out = []
+    async for d in course_edit_requests_col.find({"submitted_by": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50):
+        out.append(d)
+    return out
 
 
 @router.get("/courses/{course_name}/rounds")
@@ -602,6 +714,7 @@ async def get_course(course_name: str, user=Depends(get_current_user)):
         "city": course.get("city") if course else None,
         "region": course.get("region") if course else None,
         "country": course.get("country") if course else None,
+        "address": course.get("address") if course else None,
         "lat": course.get("lat") if course else None,
         "lng": course.get("lng") if course else None,
         "par": course.get("par") if course else None,

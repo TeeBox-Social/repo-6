@@ -6,6 +6,7 @@ import { colors, radius } from '@/src/theme';
 
 import { makeThemedSheet } from '@/src/theme';
 import { useTheme } from '@/src/theme-context';
+import { emitFeedRefresh } from '@/src/utils/feedBus';
 export default function TabsLayout() {
   useTheme();
   return (
@@ -33,6 +34,16 @@ export default function TabsLayout() {
           ),
           tabBarButtonTestID: 'tab-feed',
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            // Only scroll-to-top + refresh when the Feed tab is tapped while
+            // already focused on it — a fresh tap that navigates *to* the
+            // tab should just land normally.
+            if (navigation.isFocused()) {
+              emitFeedRefresh();
+            }
+          },
+        })}
       />
       <Tabs.Screen
         name="discover"

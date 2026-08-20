@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from db import (
     comments_col,
+    course_edit_requests_col,
     courses_col,
     follows_col,
     import_jobs_col,
@@ -39,7 +40,9 @@ router = APIRouter()
 async def admin_list_pending(user=Depends(get_current_user)):
     require_admin(user)
     out = []
-    async for c in courses_col.find({"verified": False}, {"_id": 0}).sort("created_at", -1).limit(100):
+    async for c in courses_col.find(
+        {"verified": False, "review_status": {"$ne": "rejected"}}, {"_id": 0},
+    ).sort("created_at", -1).limit(100):
         used = await rounds_col.count_documents({"course_name": c["name"]})
         out.append({**c, "round_count": used})
     return out
@@ -55,7 +58,7 @@ async def admin_verify_course(course_id: str, user=Depends(get_current_user)):
         return {"ok": True, "already_verified": True}
     await courses_col.update_one(
         {"id": course_id},
-        {"$set": {"verified": True, "verified_at": now_iso(), "verified_by": user["id"]}},
+        {"$set": {"verified": True, "review_status": "approved", "verified_at": now_iso(), "verified_by": user["id"]}},
     )
     # Notify the submitter of approval.
     submitter = course.get("submitted_by")
@@ -98,7 +101,105 @@ async def admin_reject_course(course_id: str, data: RejectIn, user=Depends(get_c
             "read": False,
             "created_at": now_iso(),
         })
-    await courses_col.delete_one({"id": course_id})
+    # Kept as a tombstone (not deleted) so the submitter's "My Submissions"
+    # history can still show a Rejected status + reason. Excluded from
+    # discovery/search/pending queries via review_status="rejected".
+    await courses_col.update_one(
+        {"id": course_id},
+        {"$set": {
+            "verified": False,
+            "review_status": "rejected",
+            "rejected_reason": reason or None,
+            "rejected_at": now_iso(),
+            "rejected_by": user["id"],
+        }},
+    )
+    return {"ok": True}
+
+
+# ---- Suggested edits to existing courses ----
+@router.get("/admin/course-edits/pending")
+async def admin_list_pending_edits(user=Depends(get_current_user)):
+    require_admin(user)
+    out = []
+    async for d in course_edit_requests_col.find({"status": "pending"}, {"_id": 0}).sort("created_at", -1).limit(100):
+        out.append(d)
+    return out
+
+
+@router.post("/admin/course-edits/{edit_id}/approve")
+async def admin_approve_course_edit(edit_id: str, user=Depends(get_current_user)):
+    require_admin(user)
+    edit_req = await course_edit_requests_col.find_one({"id": edit_id}, {"_id": 0})
+    if not edit_req:
+        raise HTTPException(status_code=404, detail="Edit request not found")
+    if edit_req.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="This edit request has already been reviewed")
+    changes = edit_req.get("proposed_changes") or {}
+    if changes:
+        # Track which fields were manually edited so _ensure_course_details()
+        # (which re-fetches from OpenGolfAPI on TTL expiry) does NOT clobber
+        # admin-approved edits on the next course fetch.
+        edited_field_names = list(changes.keys())
+        await courses_col.update_one(
+            {"name": edit_req["course_name"]},
+            {
+                "$set": {**changes, "updated_at": now_iso()},
+                "$addToSet": {"manually_edited_fields": {"$each": edited_field_names}},
+            },
+        )
+    await course_edit_requests_col.update_one(
+        {"id": edit_id},
+        {"$set": {"status": "approved", "reviewed_at": now_iso(), "reviewed_by": user["id"]}},
+    )
+    submitter = edit_req.get("submitted_by")
+    if submitter:
+        await emit_notification(
+            user_id=submitter,
+            pref_key="course_verified",
+            type_="course_edit_approved",
+            title="Course edit approved",
+            body=f'Your suggested changes to "{edit_req["course_name"]}" are now live.',
+            extra={"course_name": edit_req["course_name"], "edit_request_id": edit_id},
+        )
+    return {"ok": True}
+
+
+@router.post("/admin/course-edits/{edit_id}/reject")
+async def admin_reject_course_edit(edit_id: str, data: RejectIn, user=Depends(get_current_user)):
+    require_admin(user)
+    edit_req = await course_edit_requests_col.find_one({"id": edit_id}, {"_id": 0})
+    if not edit_req:
+        raise HTTPException(status_code=404, detail="Edit request not found")
+    if edit_req.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="This edit request has already been reviewed")
+    reason = (data.reason or "").strip()
+    await course_edit_requests_col.update_one(
+        {"id": edit_id},
+        {"$set": {
+            "status": "rejected",
+            "reason": reason or None,
+            "reviewed_at": now_iso(),
+            "reviewed_by": user["id"],
+        }},
+    )
+    submitter = edit_req.get("submitted_by")
+    if submitter:
+        # Direct insert (not pref-gated), matching the new-course rejection pattern.
+        await notifications_col.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": submitter,
+            "type": "course_edit_rejected",
+            "title": "Course edit rejected",
+            "body": (
+                f'Your suggested changes to "{edit_req["course_name"]}" were not approved.'
+                + (f" Reason: {reason}" if reason else "")
+            ),
+            "course_name": edit_req["course_name"],
+            "reason": reason or None,
+            "read": False,
+            "created_at": now_iso(),
+        })
     return {"ok": True}
 
 
@@ -254,11 +355,14 @@ async def admin_purge_demo(data: PurgeIn, user=Depends(get_current_user)):
         report["submitted_courses"] = await _count(
             courses_col, {"submitted_by": {"$in": user_ids}, "verified": False},
         )
+        report["course_edit_requests"] = await _count(
+            course_edit_requests_col, {"submitted_by": {"$in": user_ids}},
+        )
     else:
         report.update({
             "rounds": 0, "likes": 0, "comments": 0, "follows_from": 0, "follows_to": 0,
             "notifications": 0, "refresh_tokens": 0, "wishlists": 0, "reviews": 0,
-            "submitted_courses": 0,
+            "submitted_courses": 0, "course_edit_requests": 0,
         })
 
     if data.dry_run or not user_ids:
@@ -274,6 +378,7 @@ async def admin_purge_demo(data: PurgeIn, user=Depends(get_current_user)):
     await wishlists_col.delete_many({"user_id": {"$in": user_ids}})
     await reviews_col.delete_many({"user_id": {"$in": user_ids}})
     await courses_col.delete_many({"submitted_by": {"$in": user_ids}, "verified": False})
+    await course_edit_requests_col.delete_many({"submitted_by": {"$in": user_ids}})
     await users_col.delete_many({"id": {"$in": user_ids}})
 
     return {"ok": True, **report}
