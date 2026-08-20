@@ -155,6 +155,7 @@ function ProtectedRouter() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="auth" options={{ presentation: 'card', animation: 'none' }} />
       <Stack.Screen name="post/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="user/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="user/[id]/friends" options={{ presentation: 'card' }} />

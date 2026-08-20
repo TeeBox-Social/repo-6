@@ -26,6 +26,12 @@ type AuthState = {
 
 const AuthCtx = createContext<AuthState | null>(null);
 
+// Module-level dedupe set for Google session_ids we've already exchanged.
+// On native, both `openAuthSessionAsync` and the Linking listener (and the
+// `/auth` callback screen) will fire for the same deep link — Emergent
+// invalidates the id after first use, so a naive second call 401s.
+const _sentSessionIds: Set<string> = new Set();
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +98,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogleSession = useCallback(async (session_id: string) => {
+    // Playbook rule #6: dedupe. On native, up to three sources can fire the
+    // same session_id (openAuthSessionAsync result, the root URL listener,
+    // and the /auth callback screen). Emergent rejects re-used session_ids
+    // with 401 — swallowing the duplicate here avoids a spurious error UI.
+    if (_sentSessionIds.has(session_id)) return;
+    _sentSessionIds.add(session_id);
     const res = await api.googleSignIn(session_id);
     await saveTokens(res.access_token, res.refresh_token);
     setUser(res.user);

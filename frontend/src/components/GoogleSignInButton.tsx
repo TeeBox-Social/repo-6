@@ -8,6 +8,11 @@ import { makeThemedSheet } from '@/src/theme';
 import { useTheme } from '@/src/theme-context';
 import { useAuth } from '@/src/auth-context';
 
+// Required at module scope so Chrome Custom Tabs / ASWebAuthenticationSession
+// dismisses cleanly on Android when the redirect fires. Without this the
+// browser tab can stay open and the deep link falls through to the OS.
+WebBrowser.maybeCompleteAuthSession();
+
 // Emergent-managed Google OAuth entry URL. Handles the entire Google consent
 // flow and redirects back with #session_id=... which we swap on the backend.
 const EMERGENT_AUTH_URL = 'https://auth.emergentagent.com/';
@@ -43,13 +48,25 @@ export function GoogleSignInButton({ onError, testID, label = 'Continue with Goo
   const handlePress = async () => {
     if (busy) return;
     setBusy(true);
+    // Register the Linking listener BEFORE opening the session — on Android,
+    // Chrome Custom Tabs frequently returns `dismiss` with no URL even when
+    // the deep link fired, so this listener is our primary source of truth,
+    // not a fallback. (per Emergent playbook)
+    let listenerUrl: string | null = null;
+    const sub = Linking.addEventListener('url', (e) => {
+      if (e?.url && /session_id=/.test(e.url)) listenerUrl = e.url;
+    });
     try {
       const redirectUrl =
         Platform.OS === 'web'
           ? // On web, we return the user to the app root — the root layout
             // detects `#session_id=` on mount.
             (typeof window !== 'undefined' ? window.location.origin + '/' : '/')
-          : Linking.createURL('auth');
+          : // Empty path → `teebox://` — the app-scheme root. Using a named
+            // path like `'auth'` produces `teebox://auth` which expo-router
+            // treats as a route request and 404s when no matching file
+            // exists. Root path is always safe.
+            Linking.createURL('');
       const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
 
       if (Platform.OS === 'web') {
@@ -58,13 +75,25 @@ export function GoogleSignInButton({ onError, testID, label = 'Continue with Goo
       }
 
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-      if (result.type !== 'success') {
-        setBusy(false);
-        return; // user cancelled — silently reset
+      // Prefer the URL from the WebBrowser result. If Android returned
+      // `dismiss` with no URL, fall back to whatever the Linking listener
+      // captured, then to `getInitialURL()` as last resort.
+      let callbackUrl: string | null =
+        (result as any)?.url || listenerUrl || null;
+      if (!callbackUrl) {
+        try {
+          callbackUrl = await Linking.getInitialURL();
+        } catch {
+          callbackUrl = null;
+        }
       }
-      const sessionId = extractSessionId(result.url);
+      const sessionId = extractSessionId(callbackUrl);
       if (!sessionId) {
-        onError?.('Google returned no session. Please try again.');
+        // Truly no session anywhere — either user cancelled or the flow
+        // failed. Only surface an error if the WebBrowser reported success.
+        if (result?.type === 'success') {
+          onError?.('Google returned no session. Please try again.');
+        }
         setBusy(false);
         return;
       }
@@ -73,6 +102,7 @@ export function GoogleSignInButton({ onError, testID, label = 'Continue with Goo
     } catch (e: any) {
       onError?.(e?.message || 'Google sign-in failed. Please try again.');
     } finally {
+      sub.remove();
       setBusy(false);
     }
   };

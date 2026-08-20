@@ -1,0 +1,22 @@
+{
+  "summary": "Focused re-test of Google OAuth deep-link fix (frontend-only, Playwright, viewport 390x844). All 4 requested scenarios PASSED. No 'Unmatched Route' 404 appears at /auth or /auth?session_id=<fake> anymore. Standard email/password login regression (reese@teebox.demo / password123) still lands the user in /(tabs) with the Feed rendering. Console during the fake session_id test showed 'Google sign-in failed: Google session invalid or expired' (expected — backend rejected the bogus session) and the app bounced back to /sign-in without a 404 flash. No red-screen errors observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.tsx uses Linking.getInitialURL() to read the session_id, which on web returns null-ish/empty. In this environment it worked because ProtectedRouter in _layout.tsx also inspects window.location and calls signInWithGoogleSession first; the _sentSessionIds dedupe guard then no-ops the second call from auth.tsx. Consider having auth.tsx also read window.location on web for symmetry, otherwise it silently sets errored=true and redirects — currently benign because the layout handler already fired, but fragile."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None. Used pre-seeded demo admin reese@teebox.demo.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "GoogleSignInButton uses testID 'sign-in-google' on the sign-in screen (overridden from the default 'google-sign-in-button'). Use that selector for future tests. /auth route in expo-router now exists and renders <ActivityIndicator/> + 'Signing you in…' briefly before redirecting. On web the /_layout.tsx effect that reads window.location.hash beats /auth to the punch, so the auth.tsx spinner is essentially never seen on web — visible-briefly guarantee only holds on native. On mobile/native the auth.tsx spinner + Linking.getInitialURL() flow is the primary path.",
+  "rca_of_issue": "Original 404 was caused by GoogleSignInButton passing Linking.createURL('auth') → 'teebox://auth' as OAuth redirect. Expo-router treats the host segment as a route name; with no matching app/auth.tsx it rendered the 'Unmatched Route' 404 screen. Fix combines two things: (a) redirect changed to Linking.createURL('') so the callback lands on the app root where the existing _layout.tsx listener handles session_id, and (b) an app/auth.tsx safety-net route was added so any deployed build still emitting the old 'teebox://auth' redirect no longer 404s. The auth-context._sentSessionIds Set prevents duplicate /auth/session exchange when both the _layout listener and auth.tsx handler see the same URL."
+}
