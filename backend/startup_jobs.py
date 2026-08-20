@@ -17,13 +17,16 @@ from config import (
     ENABLE_DEMO_SEED,
 )
 from db import (
+    chat_reads_col,
     comments_col,
+    conversations_col,
     courses_col,
     follows_col,
     groups_col,
     import_jobs_col,
     lfg_interests_col,
     likes_col,
+    messages_col,
     notifications_col,
     refresh_tokens_col,
     reviews_col,
@@ -103,6 +106,15 @@ async def ensure_indexes() -> None:
         await groups_col.create_index("invite_code", unique=True)
         await groups_col.create_index("member_ids")
         await groups_col.create_index("admin_id")
+
+        # Messaging: DM conversation lookup by pair + inbox sort; message
+        # pagination by thread; read-receipt lookups by (thread, user).
+        await conversations_col.create_index("pair_key", unique=True)
+        await conversations_col.create_index([("participant_ids", 1), ("last_message_at", -1)])
+        await messages_col.create_index([("thread_type", 1), ("thread_id", 1), ("created_at", -1)])
+        await chat_reads_col.create_index(
+            [("thread_type", 1), ("thread_id", 1), ("user_id", 1)], unique=True,
+        )
 
         logger.info("All database indexes created/verified successfully")
     except Exception as e:

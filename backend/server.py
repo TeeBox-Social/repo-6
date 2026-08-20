@@ -35,6 +35,7 @@ from routers import auth as auth_router  # noqa: E402
 from routers import courses as courses_router  # noqa: E402
 from routers import groups as groups_router  # noqa: E402
 from routers import lfg as lfg_router  # noqa: E402
+from routers import messages as messages_router  # noqa: E402
 from routers import notifications as notifications_router  # noqa: E402
 from routers import rounds as rounds_router  # noqa: E402
 from routers import users as users_router  # noqa: E402
@@ -61,6 +62,7 @@ api_router.include_router(lfg_router.router)
 api_router.include_router(users_router.router)
 api_router.include_router(courses_router.router)
 api_router.include_router(groups_router.router)
+api_router.include_router(messages_router.router)
 api_router.include_router(notifications_router.router)
 api_router.include_router(admin_router.router)
 

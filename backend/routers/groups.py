@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from db import follows_col, groups_col, rounds_col, users_col
+from db import chat_reads_col, follows_col, groups_col, messages_col, rounds_col, users_col
 from helpers import (
     batch_course_par_cache,
     emit_notification,
@@ -26,7 +26,7 @@ from helpers import (
     now_iso,
     public_user,
 )
-from models import GroupAddMemberIn, GroupIn, GroupJoinIn, GroupUpdate
+from models import GroupAddMemberIn, GroupChatIn, GroupIn, GroupJoinIn, GroupUpdate
 from security import get_current_user
 
 router = APIRouter()
@@ -430,3 +430,94 @@ async def group_leaderboard(
         "season": year,
         "entries": scored + unscored,
     }
+
+
+# ---- Season history: which years have a leaderboard worth browsing ----
+@router.get("/groups/{group_id}/seasons")
+async def group_seasons(group_id: str, user=Depends(get_current_user)):
+    """Years the member can page through on the Leaderboard tab — from the
+    group's creation year through the current year, newest first. Computed
+    from ``created_at`` rather than scanning rounds so it's a single cheap
+    lookup regardless of group activity."""
+    g = await _get_group_or_404(group_id)
+    _require_member(g, user["id"])
+    current_year = datetime.now(timezone.utc).year
+    created_year = current_year
+    created_at = g.get("created_at")
+    if created_at:
+        try:
+            created_year = datetime.fromisoformat(created_at.replace("Z", "+00:00")).year
+        except ValueError:
+            pass
+    start_year = min(created_year, current_year)
+    return {"seasons": list(range(current_year, start_year - 1, -1))}
+
+
+# ---- Group chat (member-only, silent — no per-message notifications to
+# avoid spamming larger groups; members simply see new messages when they
+# open the tab). Shares the messages_col/chat_reads_col store with DMs via
+# thread_type="group" so both use identical pagination semantics. ----
+@router.get("/groups/{group_id}/chat")
+async def group_chat_messages(
+    group_id: str,
+    before: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    user=Depends(get_current_user),
+):
+    g = await _get_group_or_404(group_id)
+    _require_member(g, user["id"])
+    query: dict = {"thread_type": "group", "thread_id": group_id}
+    if before:
+        query["created_at"] = {"$lt": before}
+    cursor = messages_col.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    msgs = [m async for m in cursor]
+    msgs.reverse()
+    if not msgs:
+        return msgs
+    sender_ids = list({m["sender_id"] for m in msgs})
+    senders = {
+        u["id"]: public_user(u)
+        async for u in users_col.find({"id": {"$in": sender_ids}}, {"_id": 0, "hashed_password": 0, "email": 0})
+    }
+    for m in msgs:
+        m["sender"] = senders.get(m["sender_id"])
+    return msgs
+
+
+@router.post("/groups/{group_id}/chat")
+async def send_group_chat_message(group_id: str, data: GroupChatIn, user=Depends(get_current_user)):
+    g = await _get_group_or_404(group_id)
+    _require_member(g, user["id"])
+    text = data.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message can't be empty")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "thread_type": "group",
+        "thread_id": group_id,
+        "sender_id": user["id"],
+        "text": text,
+        "created_at": now_iso(),
+    }
+    await messages_col.insert_one(doc)
+    await chat_reads_col.update_one(
+        {"thread_type": "group", "thread_id": group_id, "user_id": user["id"]},
+        {"$set": {"last_read_at": doc["created_at"]}},
+        upsert=True,
+    )
+    out = dict(doc)
+    out.pop("_id", None)
+    out["sender"] = public_user(user)
+    return out
+
+
+@router.post("/groups/{group_id}/chat/read")
+async def mark_group_chat_read(group_id: str, user=Depends(get_current_user)):
+    g = await _get_group_or_404(group_id)
+    _require_member(g, user["id"])
+    await chat_reads_col.update_one(
+        {"thread_type": "group", "thread_id": group_id, "user_id": user["id"]},
+        {"$set": {"last_read_at": now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True}

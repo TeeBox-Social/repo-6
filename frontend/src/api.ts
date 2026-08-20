@@ -27,6 +27,7 @@ export type NotificationPrefs = {
   course_verified: boolean;
   lfg_interest: boolean;
   lfg_response: boolean;
+  direct_message: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -39,6 +40,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   course_verified: true,
   lfg_interest: true,
   lfg_response: true,
+  direct_message: true,
 };
 
 export type ImportJob = {
@@ -476,6 +478,30 @@ export const api = {
         last_played: string | null;
       }>;
     }>(`/groups/${id}/leaderboard${season ? `?season=${season}` : ''}`),
+  groupSeasons: (id: string) => request<{ seasons: number[] }>(`/groups/${id}/seasons`),
+  groupChatMessages: (id: string, before?: string) =>
+    request<ChatMessage[]>(`/groups/${id}/chat${before ? `?before=${encodeURIComponent(before)}` : ''}`),
+  sendGroupChatMessage: (id: string, text: string) =>
+    request<ChatMessage>(`/groups/${id}/chat`, { method: 'POST', body: JSON.stringify({ text }) }),
+  markGroupChatRead: (id: string) =>
+    request<{ ok: boolean }>(`/groups/${id}/chat/read`, { method: 'POST' }),
+
+  // ---- Direct messaging ----
+  startConversation: (user_id: string) =>
+    request<Conversation>('/messages/conversations', { method: 'POST', body: JSON.stringify({ user_id }) }),
+  listConversations: () => request<Conversation[]>('/messages/conversations'),
+  unreadMessageCount: () => request<{ unread_conversations: number }>('/messages/unread-count'),
+  getMessages: (conversationId: string, before?: string) =>
+    request<ChatMessage[]>(
+      `/messages/conversations/${conversationId}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`,
+    ),
+  sendMessage: (conversationId: string, text: string) =>
+    request<ChatMessage>(`/messages/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  markConversationRead: (conversationId: string) =>
+    request<{ ok: boolean }>(`/messages/conversations/${conversationId}/read`, { method: 'POST' }),
 };
 
 export type Group = {
@@ -491,4 +517,24 @@ export type Group = {
   is_admin: boolean;
   is_member: boolean;
   members: Array<{ id: string; display_name: string; avatar?: string | null; handicap?: number | null; home_course?: string | null }>;
+};
+
+export type ChatMessage = {
+  id: string;
+  thread_type: 'dm' | 'group';
+  thread_id: string;
+  sender_id: string;
+  text: string;
+  created_at: string;
+  sender?: { id: string; display_name: string; avatar?: string | null } | null;
+};
+
+export type Conversation = {
+  id: string;
+  other_user: { id: string; display_name: string; avatar?: string | null; home_course?: string | null } | null;
+  last_message_text: string | null;
+  last_message_at: string | null;
+  last_sender_id: string | null;
+  unread: boolean;
+  created_at: string;
 };

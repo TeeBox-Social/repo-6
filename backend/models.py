@@ -189,3 +189,16 @@ class GroupJoinIn(BaseModel):
 
 class GroupAddMemberIn(BaseModel):
     user_id: str = Field(min_length=1, max_length=80)
+
+
+# ---- Messaging (DMs + group chat) ----
+class ConversationStartIn(BaseModel):
+    user_id: str = Field(min_length=1, max_length=80)
+
+
+class MessageIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class GroupChatIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)

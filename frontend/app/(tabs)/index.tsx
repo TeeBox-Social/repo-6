@@ -14,8 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, IMAGES, radius, shadow, spacing } from '@/src/theme';
-import { makeThemedSheet } from '@/src/theme';
+import { colors, IMAGES, makeThemedSheet, radius, shadow, spacing } from '@/src/theme';
 import { useTheme } from '@/src/theme-context';
 import { api } from '@/src/api';
 import { RoundCard } from '@/src/components/RoundCard';
@@ -42,17 +41,20 @@ export default function Feed() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
   const [filter, setFilter] = useState<FeedFilter>('all');
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [data, notif] = await Promise.all([
+      const [data, notif, msgUnread] = await Promise.all([
         api.feed('followers'),
         api.listNotifications().catch(() => ({ unread: 0, notifications: [] })),
+        api.unreadMessageCount().catch(() => ({ unread_conversations: 0 })),
       ]);
       setRounds(data);
       setUnread(notif.unread || 0);
+      setUnreadMsgs(msgUnread.unread_conversations || 0);
     } catch (e: any) {
       setError(e?.message || 'Failed to load feed');
     }
@@ -130,6 +132,19 @@ export default function Feed() {
           {unread > 0 ? (
             <View style={styles.bellBadge}>
               <Text style={styles.bellBadgeText}>{unread > 9 ? '9+' : String(unread)}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+        <Pressable
+          testID="header-messages"
+          onPress={() => router.push('/messages')}
+          style={styles.bellBtn}
+          hitSlop={6}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={21} color={colors.onSurface} />
+          {unreadMsgs > 0 ? (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unreadMsgs > 9 ? '9+' : String(unreadMsgs)}</Text>
             </View>
           ) : null}
         </Pressable>

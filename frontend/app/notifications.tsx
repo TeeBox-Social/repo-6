@@ -31,6 +31,7 @@ type Notification = {
   actor_id?: string;
   actor_name?: string;
   achievement_key?: string;
+  conversation_id?: string;
 };
 
 function iconForType(type: string): { icon: any; color: string } {
@@ -59,6 +60,8 @@ function iconForType(type: string): { icon: any; color: string } {
       return { icon: 'hand-right', color: colors.brandPrimary };
     case 'lfg_response':
       return { icon: 'people', color: colors.brandPrimary };
+    case 'direct_message':
+      return { icon: 'chatbubble-ellipses', color: colors.brandPrimary };
     default:
       return { icon: 'notifications', color: colors.brandPrimary };
   }
@@ -78,6 +81,10 @@ function resolveNotificationTarget(n: Notification): string | null {
       return n.round_id ? `/post/${n.round_id}` : null;
     case 'follow':
       return n.actor_id ? `/user/${n.actor_id}` : null;
+    case 'direct_message':
+      return n.conversation_id && n.actor_id
+        ? `/messages/${n.conversation_id}?name=${encodeURIComponent(n.actor_name || 'Golfer')}&otherId=${n.actor_id}`
+        : null;
     case 'course_verified':
       return n.course_name ? `/course/${encodeURIComponent(n.course_name)}` : null;
     case 'course_edit_approved':

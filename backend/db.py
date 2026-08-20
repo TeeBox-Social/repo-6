@@ -24,3 +24,6 @@ notifications_col = db.notifications
 lfg_interests_col = db.lfg_interests
 course_edit_requests_col = db.course_edit_requests
 groups_col = db.groups
+conversations_col = db.conversations
+messages_col = db.messages
+chat_reads_col = db.chat_reads

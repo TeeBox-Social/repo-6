@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +28,7 @@ export default function UserDetail() {
   const [profile, setProfile] = useState<any>(null);
   const [rounds, setRounds] = useState<any[] | null>(null);
   const [wishlist, setWishlist] = useState<any[] | null>(null);
+  const [messaging, setMessaging] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -58,6 +60,22 @@ export default function UserDetail() {
     try {
       await api.toggleFollow(String(id));
     } catch {}
+  };
+
+  const startMessage = async () => {
+    if (!profile || messaging) return;
+    setMessaging(true);
+    try {
+      const conv = await api.startConversation(profile.id);
+      router.push({
+        pathname: `/messages/${conv.id}` as any,
+        params: { name: profile.display_name, avatar: profile.avatar || '', otherId: profile.id },
+      });
+    } catch (e: any) {
+      Alert.alert('Could not start chat', e?.message || 'Try again.');
+    } finally {
+      setMessaging(false);
+    }
   };
 
   const onLike = async (rid: string) => {
@@ -157,12 +175,30 @@ export default function UserDetail() {
 
       {!profile.is_me ? (
         <View style={styles.followWrap}>
-          <TBButton
-            label={profile.is_following ? 'Following' : 'Follow'}
-            testID="user-follow-btn"
-            onPress={toggleFollow}
-            variant={profile.is_following ? 'secondary' : 'primary'}
-          />
+          <View style={{ flex: 1 }}>
+            <TBButton
+              label={profile.is_following ? 'Following' : 'Follow'}
+              testID="user-follow-btn"
+              onPress={toggleFollow}
+              variant={profile.is_following ? 'secondary' : 'primary'}
+            />
+          </View>
+          <Pressable
+            testID="user-message-btn"
+            onPress={startMessage}
+            style={styles.messageBtn}
+            hitSlop={8}
+            disabled={messaging}
+          >
+            {messaging ? (
+              <ActivityIndicator size="small" color={colors.brandPrimary} />
+            ) : (
+              <>
+                <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.brandPrimary} />
+                <Text style={styles.messageBtnText}>Message</Text>
+              </>
+            )}
+          </Pressable>
         </View>
       ) : null}
 
@@ -287,7 +323,19 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     marginTop: 2,
     textTransform: 'uppercase',
   },
-  followWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  followWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  messageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    height: 48,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  messageBtnText: { fontSize: 14, fontWeight: '800', color: colors.brandPrimary },
   section: { marginTop: spacing.xl, paddingHorizontal: spacing.lg },
   pinBadge: {
     flexDirection: 'row',

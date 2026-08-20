@@ -80,6 +80,12 @@ const ROWS: PrefRow[] = [
     desc: 'When an organizer accepts or declines your join request.',
     icon: 'people-outline',
   },
+  {
+    key: 'direct_message',
+    title: 'Direct messages',
+    desc: 'When another golfer sends you a message.',
+    icon: 'chatbubble-ellipses-outline',
+  },
 ];
 
 export default function NotificationSettings() {

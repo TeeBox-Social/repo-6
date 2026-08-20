@@ -73,6 +73,7 @@ NOTIFICATION_PREF_KEYS: set[str] = {
     "course_verified",        # my submitted course was approved/rejected
     "lfg_interest",           # someone said they're in for my LFG round
     "lfg_response",           # an organizer accepted/declined my join request
+    "direct_message",         # someone sent me a direct message
 }
 DEFAULT_NOTIFICATION_PREFS = {k: True for k in NOTIFICATION_PREF_KEYS}
 

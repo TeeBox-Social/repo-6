@@ -165,6 +165,9 @@ function ProtectedRouter() {
       <Stack.Screen name="settings" options={{ presentation: 'card' }} />
       <Stack.Screen name="premium" options={{ presentation: 'card' }} />
       <Stack.Screen name="notifications" options={{ presentation: 'card' }} />
+      <Stack.Screen name="messages/index" options={{ presentation: 'card' }} />
+      <Stack.Screen name="messages/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="groups/[id]/chat" options={{ presentation: 'card' }} />
       <Stack.Screen name="reset-password" options={{ presentation: 'card' }} />
       <Stack.Screen name="verify-email" options={{ presentation: 'card' }} />
     </Stack>

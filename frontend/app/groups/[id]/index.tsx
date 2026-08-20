@@ -43,6 +43,8 @@ export default function GroupDetailScreen() {
   const [tab, setTab] = useState<TabKey>('feed');
   const [feed, setFeed] = useState<any[] | null>(null);
   const [leaderboard, setLeaderboard] = useState<any | null>(null);
+  const [seasons, setSeasons] = useState<number[] | null>(null);
+  const [season, setSeason] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -55,19 +57,24 @@ export default function GroupDetailScreen() {
     }
   }, [groupId]);
 
-  const loadTab = useCallback(async (key: TabKey) => {
+  const loadTab = useCallback(async (key: TabKey, forSeason?: number) => {
     try {
       if (key === 'feed') {
         const data = await api.groupFeed(groupId);
         setFeed(data);
       } else if (key === 'leaderboard') {
-        const data = await api.groupLeaderboard(groupId);
+        const [data, seasonList] = await Promise.all([
+          api.groupLeaderboard(groupId, forSeason),
+          seasons === null ? api.groupSeasons(groupId).then((r) => r.seasons) : Promise.resolve(seasons),
+        ]);
         setLeaderboard(data);
+        setSeason(data.season);
+        setSeasons(seasonList);
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to load.');
     }
-  }, [groupId]);
+  }, [groupId, seasons]);
 
   useEffect(() => {
     loadGroup();
@@ -85,6 +92,19 @@ export default function GroupDetailScreen() {
     setTab(key);
     if (key === 'feed' && feed === null) loadTab('feed');
     if (key === 'leaderboard' && leaderboard === null) loadTab('leaderboard');
+  };
+
+  const selectSeason = (year: number) => {
+    if (year === season) return;
+    Haptics.selectionAsync().catch(() => {});
+    setLeaderboard(null);
+    loadTab('leaderboard', year);
+  };
+
+  const openGroupChat = () => {
+    if (!group) return;
+    Haptics.selectionAsync().catch(() => {});
+    router.push({ pathname: `/groups/${groupId}/chat` as any, params: { name: group.name } });
   };
 
   const onRefresh = async () => {
@@ -268,6 +288,14 @@ export default function GroupDetailScreen() {
               <Ionicons name="share-social-outline" size={18} color="#fff" />
             </Pressable>
           </View>
+
+          <Pressable style={styles.chatCta} onPress={openGroupChat} testID="group-open-chat">
+            <View style={styles.chatCtaIcon}>
+              <Ionicons name="chatbubbles" size={16} color="#fff" />
+            </View>
+            <Text style={styles.chatCtaText}>Group chat</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </Pressable>
         </View>
 
         {/* Sticky tab bar */}
@@ -324,6 +352,28 @@ export default function GroupDetailScreen() {
               <ActivityIndicator color={colors.brandPrimary} style={{ marginTop: spacing.xl }} />
             ) : (
               <>
+                {seasons && seasons.length > 1 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.seasonChipRow}
+                    testID="group-season-picker"
+                  >
+                    {seasons.map((y) => {
+                      const active = y === leaderboard.season;
+                      return (
+                        <Pressable
+                          key={y}
+                          testID={`group-season-${y}`}
+                          onPress={() => selectSeason(y)}
+                          style={[styles.seasonChip, active && styles.seasonChipActive]}
+                        >
+                          <Text style={[styles.seasonChipText, active && styles.seasonChipTextActive]}>{y}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
                 <View style={styles.seasonHeader}>
                   <Ionicons name="calendar-outline" size={14} color={colors.muted} />
                   <Text style={styles.seasonText}>Season · {leaderboard.season}</Text>
@@ -331,7 +381,11 @@ export default function GroupDetailScreen() {
                 {leaderboard.entries.length === 0 ? (
                   <View style={styles.empty}>
                     <Text style={styles.emptyTitle}>No scores yet</Text>
-                    <Text style={styles.emptySub}>Log an 18- or 9-hole round with a score to appear on the leaderboard.</Text>
+                    <Text style={styles.emptySub}>
+                      {leaderboard.season === new Date().getFullYear()
+                        ? 'Log an 18- or 9-hole round with a score to appear on the leaderboard.'
+                        : `Nobody in this group posted a scored round in ${leaderboard.season}.`}
+                    </Text>
                   </View>
                 ) : (
                   <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
@@ -503,6 +557,24 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   iconBtnPrimary: { backgroundColor: colors.brandPrimary },
+  chatCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    ...shadow.soft,
+  },
+  chatCtaIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatCtaText: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.onSurface },
   tabWrap: {
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.lg,
@@ -558,6 +630,21 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     marginBottom: spacing.sm,
   },
   seasonText: { fontSize: 12, color: colors.muted, fontWeight: '700', letterSpacing: 0.3 },
+  seasonChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  seasonChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceTertiary,
+  },
+  seasonChipActive: { backgroundColor: colors.brandPrimary },
+  seasonChipText: { fontSize: 13, fontWeight: '800', color: colors.onSurface },
+  seasonChipTextActive: { color: '#fff' },
   lbRow: {
     flexDirection: 'row',
     alignItems: 'center',
