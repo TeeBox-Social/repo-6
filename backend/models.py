@@ -166,3 +166,26 @@ class GoogleAuthIn(BaseModel):
     Emergent's session-data API to fetch the verified Google identity.
     """
     session_id: str = Field(min_length=8, max_length=200)
+
+
+# ---- Groups & Leagues ----
+class GroupIn(BaseModel):
+    name: str = Field(min_length=2, max_length=60)
+    description: Optional[str] = Field(default="", max_length=240)
+    # "admin"  -> only the group admin can add members
+    # "any"    -> any member can add other members
+    member_add_policy: Optional[str] = Field(default="admin", pattern="^(admin|any)$")
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=60)
+    description: Optional[str] = Field(default=None, max_length=240)
+    member_add_policy: Optional[str] = Field(default=None, pattern="^(admin|any)$")
+
+
+class GroupJoinIn(BaseModel):
+    invite_code: str = Field(min_length=4, max_length=20)
+
+
+class GroupAddMemberIn(BaseModel):
+    user_id: str = Field(min_length=1, max_length=80)

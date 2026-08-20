@@ -441,4 +441,54 @@ export const api = {
     request<{ jobs: ImportJob[]; total_courses: number }>('/admin/courses/import-jobs'),
   adminCancelJob: (id: string) =>
     request<{ ok: boolean }>(`/admin/courses/import-jobs/${id}/cancel`, { method: 'POST' }),
+
+  // ---- Groups & Leagues ----
+  listMyGroups: () => request<Group[]>('/groups/mine'),
+  createGroup: (payload: { name: string; description?: string; member_add_policy: 'admin' | 'any' }) =>
+    request<Group>('/groups', { method: 'POST', body: JSON.stringify(payload) }),
+  getGroup: (id: string) => request<Group>(`/groups/${id}`),
+  updateGroup: (id: string, payload: Partial<{ name: string; description: string; member_add_policy: 'admin' | 'any' }>) =>
+    request<Group>(`/groups/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteGroup: (id: string) => request<{ ok: boolean }>(`/groups/${id}`, { method: 'DELETE' }),
+  joinGroupByCode: (invite_code: string) =>
+    request<Group>('/groups/join', { method: 'POST', body: JSON.stringify({ invite_code }) }),
+  leaveGroup: (id: string) => request<{ ok: boolean }>(`/groups/${id}/leave`, { method: 'POST' }),
+  addGroupMember: (id: string, user_id: string) =>
+    request<Group>(`/groups/${id}/members`, { method: 'POST', body: JSON.stringify({ user_id }) }),
+  removeGroupMember: (id: string, user_id: string) =>
+    request<{ ok: boolean }>(`/groups/${id}/members/${user_id}`, { method: 'DELETE' }),
+  groupAddCandidates: (id: string, q = '') =>
+    request<Array<{ id: string; display_name: string; avatar?: string | null }>>(
+      `/groups/${id}/candidates?q=${encodeURIComponent(q)}`,
+    ),
+  groupFeed: (id: string) => request<any[]>(`/groups/${id}/feed`),
+  groupLeaderboard: (id: string, season?: number) =>
+    request<{
+      season: number;
+      entries: Array<{
+        id: string;
+        display_name: string;
+        avatar?: string | null;
+        rank: number | null;
+        round_count: number;
+        avg_score: number | null;
+        best_score: number | null;
+        last_played: string | null;
+      }>;
+    }>(`/groups/${id}/leaderboard${season ? `?season=${season}` : ''}`),
+};
+
+export type Group = {
+  id: string;
+  name: string;
+  description: string;
+  invite_code: string;
+  admin_id: string;
+  member_add_policy: 'admin' | 'any';
+  member_count: number;
+  max_members: number;
+  created_at: string;
+  is_admin: boolean;
+  is_member: boolean;
+  members: Array<{ id: string; display_name: string; avatar?: string | null; handicap?: number | null; home_course?: string | null }>;
 };

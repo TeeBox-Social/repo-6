@@ -299,19 +299,51 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 8
+  test_sequence: 9
   run_ui: true
 
 test_plan:
   current_focus:
-    - "Feed tab tap-to-refresh (scroll to top + reload)"
-    - "Course Edit Requests: Add a Course"
-    - "Course Edit Requests: Suggest an Edit"
-    - "Course Edit Requests: My Submissions"
-    - "Admin review of pending course edit requests"
+    - "Groups & Leagues: create group + invite code + list mine"
+    - "Groups & Leagues: join by invite code + 50-member cap"
+    - "Groups & Leagues: add / remove members (with add-policy gating)"
+    - "Groups & Leagues: group feed (private, only member posts)"
+    - "Groups & Leagues: season leaderboard (calendar year, avg-score ranking)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend:
+  - task: "Groups & Leagues (private groups with shared feed and season leaderboard)"
+    implemented: true
+    working: true
+    file: "backend/models.py, backend/db.py, backend/routers/groups.py, backend/server.py, backend/startup_jobs.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "NEW FEATURE: Groups & Leagues. All endpoints under /api/groups/*. See iter36 test plan for full spec (invite code, 50-member cap, member_add_policy admin/any, calendar-year leaderboard with 18-hole extrapolation)."
+        -working: true
+        -agent: "testing"
+        -comment: "Iter36 — 24/24 pytest PASS. CRUD, invite-code shape (8 upper-case chars, alphabet excludes 0/1/O/I), join-by-code (wrong→404, idempotent, full 413), leave (admin 400 / non-admin 200), add-member (policy admin vs any, unknown user 404, non-admin under admin policy 403, at-cap 413), remove-member (admin can, admin-cannot-be-removed 400, self-remove works), candidates (follow-graph filter, non-admin under admin policy → []), feed 403 for non-member, delete admin-only + GET 404 after, and leaderboard: default season = current year (2026), 18-hole extrapolation verified (41 on 9-hole par-36 → ~82 → avg 81 with 3 rounds). Full report: /app/test_reports/iteration_36.json."
+
+frontend:
+  - task: "Groups & Leagues (frontend screens)"
+    implemented: true
+    working: true
+    file: "app/groups/index.tsx, app/groups/create.tsx, app/groups/join.tsx, app/groups/[id]/index.tsx, app/groups/[id]/add-members.tsx, app/(tabs)/more.tsx, src/api.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "NEW SCREENS accessed from More tab → 'Groups & Leagues'. Full list + create + join + detail (hero + tabs Feed/Leaderboard/Members) + add-members screen. Uses expo-clipboard (newly installed)."
+        -working: true
+        -agent: "testing"
+        -comment: "Iter36 frontend Playwright 390x844 — all flows a–g verified. Create group as Reese → invite code visible → Copy/Share work (no web crash) → tabs switch → Add-members search 'Jordan' → Add → pill flips → Members shows 2. Jordan sign-in → sees group → leaderboard shows Reese #1/Jordan #2 with correct averages. Group-detail-menu confirm-dialog auto-dismiss on web was a Playwright scaffolding limitation, NOT an app bug; the equivalent backend leave-flow is covered by test_non_admin_can_leave. No functional bugs; only pre-existing RN-Web shadow*/pointerEvents deprecation warnings unrelated to this feature."
 
 agent_communication:
     -agent: "main"

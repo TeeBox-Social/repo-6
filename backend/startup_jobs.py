@@ -20,6 +20,7 @@ from db import (
     comments_col,
     courses_col,
     follows_col,
+    groups_col,
     import_jobs_col,
     lfg_interests_col,
     likes_col,
@@ -97,6 +98,11 @@ async def ensure_indexes() -> None:
         # LFG interests: one request per (round, user); organizer status lookups
         await lfg_interests_col.create_index([("round_id", 1), ("user_id", 1)], unique=True)
         await lfg_interests_col.create_index([("round_id", 1), ("status", 1)])
+
+        # Groups: unique invite code + fast "my groups" lookups
+        await groups_col.create_index("invite_code", unique=True)
+        await groups_col.create_index("member_ids")
+        await groups_col.create_index("admin_id")
 
         logger.info("All database indexes created/verified successfully")
     except Exception as e:

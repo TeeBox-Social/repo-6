@@ -90,6 +90,16 @@ export default function MoreScreen() {
         />
 
         <MenuRow
+          testID="more-groups"
+          icon="people-circle-outline"
+          iconBg={colors.brandTertiary}
+          iconColor={colors.brandDeep}
+          title="Groups & Leagues"
+          subtitle="Private feeds and season leaderboards with friends"
+          onPress={() => router.push('/groups' as any)}
+        />
+
+        <MenuRow
           testID="more-settings"
           icon="settings-outline"
           iconBg={colors.surfaceTertiary}

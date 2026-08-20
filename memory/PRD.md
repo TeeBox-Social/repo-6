@@ -102,3 +102,13 @@ Feed · Discover · Log · **More**. The "More" tab (`app/(tabs)/more.tsx`) is a
 - **Admin-approved edits survive OpenGolfAPI re-syncs** — approved edits write their field names into a per-course `manually_edited_fields` array; both `_ensure_course_details()` and `_cache_opengolf_compact()` filter their write-back dicts against this set so upstream OpenGolfAPI values never revert admin-curated data.
 - New endpoints: `POST /api/courses` (new-course request), `POST /api/courses/edit-requests` (edit suggestion), `GET /api/courses/submissions/mine`, `GET /api/admin/course-edits/pending`, `POST /api/admin/course-edits/{id}/approve`, `POST /api/admin/course-edits/{id}/reject`.
 
+
+## Iteration 36 additions (Groups & Leagues)
+- **Groups & Leagues** — from the More tab (`more-groups` row), users can create private groups (`app/groups/create.tsx`) or join by invite code (`app/groups/join.tsx`). Each group has an 8-char uppercase invite code (alphabet excludes 0/1/O/I), a 50-member cap, and a creator-chosen `member_add_policy` (`admin` = only admin can add, `any` = any member can invite). Group detail (`app/groups/[id]/index.tsx`) has three sticky tabs:
+  - **Feed** — reuses `RoundCard` to show every post (round/text/lfg) authored by any group member, newest first.
+  - **Leaderboard** — calendar-year season (Jan–Dec). Members ranked ascending by average score with 9-hole scores extrapolated to their 18-hole equivalent via the existing `extrapolate_18_score` helper. Non-posting members appear at the bottom with rank/score dashes.
+  - **Members** — everyone in the group with an admin star; admin can remove any non-admin. Add-members flow (`app/groups/[id]/add-members.tsx`) searches the viewer's follow-graph (following ∪ followers) minus current members.
+  - Invite code copy (`expo-clipboard`) and native Share are exposed in the hero.
+- **New collection**: `groups_col`. **New models**: `GroupIn`, `GroupUpdate`, `GroupJoinIn`, `GroupAddMemberIn`. **Indexes**: unique `invite_code`, plus `member_ids` and `admin_id` for fast per-user and per-admin lookups.
+- **New endpoints** (all `/api/groups/*`): `POST /`, `GET /mine`, `GET /{id}`, `PATCH /{id}`, `DELETE /{id}`, `POST /join`, `POST /{id}/leave`, `POST /{id}/members`, `DELETE /{id}/members/{user_id}`, `GET /{id}/candidates?q=`, `GET /{id}/feed`, `GET /{id}/leaderboard?season=YYYY`.
+- **Notifications**: `group_join` (sent to admin when someone joins via code) and `group_added` (sent to a user when they're added directly). Both currently gated under the existing `follow` pref-key.
