@@ -107,6 +107,11 @@ export default function GroupDetailScreen() {
     router.push({ pathname: `/groups/${groupId}/chat` as any, params: { name: group.name } });
   };
 
+  const createGroupPost = () => {
+    Haptics.selectionAsync().catch(() => {});
+    router.push({ pathname: '/(tabs)/log', params: { groupId } } as any);
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([loadGroup(), loadTab(tab)]);
@@ -296,6 +301,14 @@ export default function GroupDetailScreen() {
             <Text style={styles.chatCtaText}>Group chat</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
+
+          <Pressable style={styles.chatCta} onPress={createGroupPost} testID="group-new-post">
+            <View style={[styles.chatCtaIcon, styles.postCtaIcon]}>
+              <Ionicons name="add" size={18} color="#fff" />
+            </View>
+            <Text style={styles.chatCtaText}>New post to this group</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </Pressable>
         </View>
 
         {/* Sticky tab bar */}
@@ -330,8 +343,17 @@ export default function GroupDetailScreen() {
                 </View>
                 <Text style={styles.emptyTitle}>No posts yet</Text>
                 <Text style={styles.emptySub}>
-                  Rounds and posts from group members will show up here. Log a round to kick things off.
+                  Rounds and posts shared to this group will show up here. Post something to
+                  kick things off.
                 </Text>
+                <Pressable
+                  testID="group-feed-empty-new-post"
+                  onPress={createGroupPost}
+                  style={styles.emptyCta}
+                >
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={styles.emptyCtaText}>New post</Text>
+                </Pressable>
               </View>
             ) : (
               <View style={{ gap: spacing.md, paddingHorizontal: spacing.lg }}>
@@ -575,6 +597,7 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   chatCtaText: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.onSurface },
+  postCtaIcon: { backgroundColor: colors.brandDeep },
   tabWrap: {
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.lg,
@@ -622,6 +645,17 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: colors.onSurface },
   emptySub: { fontSize: 13, color: colors.muted, textAlign: 'center', lineHeight: 18, maxWidth: 300 },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+  },
+  emptyCtaText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   seasonHeader: {
     flexDirection: 'row',
     alignItems: 'center',

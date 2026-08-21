@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only verification of two new UI additions: (1) Global DM button next to NotificationBell on Feed/Discover/Profile/Log headers and (2) 'New post to this group' CTA on Group Details page. All checks passed with reese@teebox.demo.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "verified_flows": [
+    "Feed header shows both [data-testid=header-notifications] and [data-testid=header-messages] (DMButton)",
+    "Discover header shows [data-testid=discover-header-messages] alongside NotificationBell",
+    "Log header shows [data-testid=log-header-messages] alongside NotificationBell",
+    "Profile header (cover top bar) shows [data-testid=profile-header-messages] alongside [data-testid=profile-notifications]",
+    "Tapping the DM button navigates to /messages (verified on Feed tab)",
+    "Group Details page (/groups/{id}) renders new CTA [data-testid=group-new-post] labelled 'New post to this group' below 'Group chat' CTA",
+    "Tapping 'New post to this group' navigates to /log?groupId=<id> and lands on [data-testid=log-round-screen]",
+    "On the Log screen, the target group's share pill [data-testid=log-share-group-<id>] is pre-selected (bg=brandPrimary rgb(21,128,61)) and 'Everyone' pill is inactive — round will post into the group feed",
+    "Regression: Group feed still lists a prior share-to-group post ('Shared to TEST_FE_Group2'), Group chat CTA still works, NotificationBell still renders on all tabs, existing tab navigation intact",
+    "No console/runtime errors introduced by DMButton or Group CTA; only pre-existing 'shadow* deprecated' RN-web style warnings observed"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DMButton uses useFocusEffect polling of api.unreadMessageCount() — fine, but consider debouncing when tab-switching rapidly to avoid redundant hits.",
+    "log.tsx line 49: two state hooks are declared on the same line (`useState(''); const [courseSelected...` combined). Cosmetic — split for readability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (per request)", "frontend": "100%"},
+  "seed_data_creation": "None. Used existing demo user reese@teebox.demo (admin) and their existing TEST_FE_Group2.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login: sign-in-email/sign-in-password/sign-in-submit. Profile tab is reached via header-my-profile CTA on Feed (bottom tab bar has Feed/Discover/Log/More; the More menu also exposes Profile). Group list is at /groups with rows testID=group-row-<id>. Group detail exposes group-new-post and group-open-chat CTAs. Log screen accepts a ?groupId= param and pre-selects the matching log-share-group-<id> pill.",
+  "rca_of_issue": "N/A — no bugs observed."
+}

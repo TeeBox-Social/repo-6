@@ -22,6 +22,7 @@ import { TBInput } from '@/src/components/TBInput';
 import { MentionInput } from '@/src/components/MentionInput';
 import { CourseAutocomplete } from '@/src/components/CourseAutocomplete';
 import { NotificationBell } from '@/src/components/NotificationBell';
+import { DMButton } from '@/src/components/DMButton';
 import { api, Group } from '@/src/api';
 
 // This screen doubles as the Share Intent target.
@@ -39,6 +40,7 @@ export default function LogRound() {
     putts?: string;
     notes?: string;
     source?: string;
+    groupId?: string;
   }>();
 
   const [courseName, setCourseName] = useState('');
@@ -152,6 +154,12 @@ export default function LogRound() {
       // communicates the pick.
       Haptics.selectionAsync().catch(() => {});
     }
+    if (params.groupId) {
+      // Arrived via a group's "New post" CTA — pre-select that group in the
+      // "Share to" picker so the post lands in the group's own feed.
+      setShareGroupId(String(params.groupId));
+      Haptics.selectionAsync().catch(() => {});
+    }
   }, [params]);
 
   // Consume incoming route params exactly ONCE per unique payload.
@@ -172,11 +180,12 @@ export default function LogRound() {
       params.putts || '',
       params.notes || '',
       params.source || '',
+      params.groupId || '',
     ].join('|');
     if (key === appliedPrefillKeyRef.current) return;
     // Nothing meaningful to prefill — treat as "no incoming intent" and
     // don't touch the form (so the (×) reset survives tab switches).
-    if (!params.course && !params.score && !params.notes) {
+    if (!params.course && !params.score && !params.notes && !params.groupId) {
       appliedPrefillKeyRef.current = key;
       return;
     }
@@ -194,6 +203,7 @@ export default function LogRound() {
       putts: undefined,
       notes: undefined,
       source: undefined,
+      groupId: undefined,
     } as any);
   }, [
     params.course,
@@ -205,6 +215,7 @@ export default function LogRound() {
     params.putts,
     params.notes,
     params.source,
+    params.groupId,
     applyPrefill,
     router,
   ]);
@@ -338,7 +349,10 @@ export default function LogRound() {
                     : 'Share a thought, tip, or story with your circle.'}
               </Text>
             </View>
-            <NotificationBell />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <DMButton testID="log-header-messages" />
+              <NotificationBell />
+            </View>
           </View>
           <View style={styles.segRow} testID="log-type-segment">
             {(['round', 'text', 'lfg'] as const).map((t) => (

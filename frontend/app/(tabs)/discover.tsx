@@ -21,6 +21,7 @@ import { useTheme } from '@/src/theme-context';
 import { api } from '@/src/api';
 import { useAuth } from '@/src/auth-context';
 import { NotificationBell } from '@/src/components/NotificationBell';
+import { DMButton } from '@/src/components/DMButton';
 
 type Tab = 'golfers' | 'courses';
 type LocationState =
@@ -133,7 +134,10 @@ export default function Discover() {
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Text style={styles.title}>Discover</Text>
-            <NotificationBell />
+            <View style={styles.headerIcons}>
+              <DMButton testID="discover-header-messages" />
+              <NotificationBell />
+            </View>
           </View>
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color={colors.muted} />
@@ -435,6 +439,7 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
   title: { fontSize: 26, fontWeight: '800', color: colors.onSurface },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

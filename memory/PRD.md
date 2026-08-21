@@ -112,3 +112,10 @@ Feed · Discover · Log · **More**. The "More" tab (`app/(tabs)/more.tsx`) is a
 - **New collection**: `groups_col`. **New models**: `GroupIn`, `GroupUpdate`, `GroupJoinIn`, `GroupAddMemberIn`. **Indexes**: unique `invite_code`, plus `member_ids` and `admin_id` for fast per-user and per-admin lookups.
 - **New endpoints** (all `/api/groups/*`): `POST /`, `GET /mine`, `GET /{id}`, `PATCH /{id}`, `DELETE /{id}`, `POST /join`, `POST /{id}/leave`, `POST /{id}/members`, `DELETE /{id}/members/{user_id}`, `GET /{id}/candidates?q=`, `GET /{id}/feed`, `GET /{id}/leaderboard?season=YYYY`.
 - **Notifications**: `group_join` (sent to admin when someone joins via code) and `group_added` (sent to a user when they're added directly). Both currently gated under the existing `follow` pref-key.
+
+## Iteration 38–39 additions (Groups extras + Global DM)
+- **Share-to-Group posts** — Log Round screen accepts `?groupId=<id>` and pre-selects the matching share pill; posted rounds land in the group's feed (`/api/groups/{id}/feed`).
+- **Group Invites (Accept / Decline)** — `POST /api/groups/{id}/invite`, delivered as in-app notifications with inline Accept / Decline buttons on `/notifications`; responded via `POST /api/groups/invites/{invite_id}/respond`.
+- **Public / Private Profile Groups + Request-to-Join** — users mark individual groups public on Profile → Edit; public groups appear on public profiles and expose a preview screen (`/groups/{id}/preview`) with a "Request to Join" CTA (`POST /api/groups/{id}/request_join`).
+- **Create Post from Group page** — group detail (`/groups/{id}`) now has a "New post to this group" CTA that routes to `/log?groupId=<id>` with the share pill pre-selected (data-testid `group-new-post`).
+- **Global DM button** — `src/components/DMButton.tsx` icon added to the top header of Feed, Discover, Log, and Profile tabs (mirrors the NotificationBell); taps navigate to `/messages`.

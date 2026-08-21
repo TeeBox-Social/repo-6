@@ -23,6 +23,7 @@ import { TBButton } from '@/src/components/TBButton';
 import { RoundCard } from '@/src/components/RoundCard';
 import { WishlistList } from '@/src/components/WishlistList';
 import { NotificationBell } from '@/src/components/NotificationBell';
+import { DMButton } from '@/src/components/DMButton';
 
 export default function Profile() {
   useTheme();
@@ -157,6 +158,7 @@ export default function Profile() {
         <SafeAreaView edges={['top']} style={styles.coverTopBar}>
           <View style={{ flex: 1 }} />
           <NotificationBell color="#fff" testID="profile-notifications" />
+          <DMButton color="#fff" testID="profile-header-messages" />
           <Pressable
             testID="profile-edit"
             onPress={() => router.push('/profile/edit')}

@@ -22,6 +22,8 @@ import { FeedNativeAd } from '@/src/components/FeedNativeAd';
 import { AdBanner } from '@/src/components/AdBanner';
 import { useAuth } from '@/src/auth-context';
 import { TBButton } from '@/src/components/TBButton';
+import { NotificationBell } from '@/src/components/NotificationBell';
+import { DMButton } from '@/src/components/DMButton';
 import { subscribeFeedRefresh } from '@/src/utils/feedBus';
 
 type FeedFilter = 'all' | 'round' | 'text' | 'lfg';
@@ -40,21 +42,13 @@ export default function Feed() {
   const [rounds, setRounds] = useState<any[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [unread, setUnread] = useState(0);
-  const [unreadMsgs, setUnreadMsgs] = useState(0);
   const [filter, setFilter] = useState<FeedFilter>('all');
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [data, notif, msgUnread] = await Promise.all([
-        api.feed('followers'),
-        api.listNotifications().catch(() => ({ unread: 0, notifications: [] })),
-        api.unreadMessageCount().catch(() => ({ unread_conversations: 0 })),
-      ]);
+      const data = await api.feed('followers');
       setRounds(data);
-      setUnread(notif.unread || 0);
-      setUnreadMsgs(msgUnread.unread_conversations || 0);
     } catch (e: any) {
       setError(e?.message || 'Failed to load feed');
     }
@@ -122,32 +116,8 @@ export default function Feed() {
           <Text style={styles.hello}>Hi {user?.display_name?.split(' ')[0] || 'Golfer'}</Text>
           <Text style={styles.headerTitle}>The Feed</Text>
         </View>
-        <Pressable
-          testID="header-notifications"
-          onPress={() => router.push('/notifications')}
-          style={styles.bellBtn}
-          hitSlop={6}
-        >
-          <Ionicons name="notifications-outline" size={22} color={colors.onSurface} />
-          {unread > 0 ? (
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>{unread > 9 ? '9+' : String(unread)}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-        <Pressable
-          testID="header-messages"
-          onPress={() => router.push('/messages')}
-          style={styles.bellBtn}
-          hitSlop={6}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={21} color={colors.onSurface} />
-          {unreadMsgs > 0 ? (
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>{unreadMsgs > 9 ? '9+' : String(unreadMsgs)}</Text>
-            </View>
-          ) : null}
-        </Pressable>
+        <NotificationBell testID="header-notifications" />
+        <DMButton testID="header-messages" />
         <Pressable
           testID="header-my-profile"
           onPress={() => router.push('/(tabs)/profile')}
@@ -365,29 +335,6 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     ...shadow.soft,
   },
   headerCtaText: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  bellBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bellBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: '#c0392b',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  bellBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   filterRow: {
     flexDirection: 'row',
     gap: 6,
