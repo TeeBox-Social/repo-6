@@ -15,6 +15,7 @@ export type User = {
   is_admin?: boolean;
   email_verified?: boolean;
   notification_prefs?: NotificationPrefs;
+  public_group_ids?: string[];
 };
 
 export type NotificationPrefs = {
@@ -28,6 +29,10 @@ export type NotificationPrefs = {
   lfg_interest: boolean;
   lfg_response: boolean;
   direct_message: boolean;
+  group_invite: boolean;
+  group_invite_response: boolean;
+  group_join_request: boolean;
+  group_join_response: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -41,6 +46,10 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   lfg_interest: true,
   lfg_response: true,
   direct_message: true,
+  group_invite: true,
+  group_invite_response: true,
+  group_join_request: true,
+  group_join_response: true,
 };
 
 export type ImportJob = {
@@ -363,6 +372,7 @@ export const api = {
       id: string; type: string; title: string; body: string; read: boolean; created_at: string;
       course_name?: string; reason?: string; round_id?: string; comment_id?: string;
       actor_id?: string; actor_name?: string; achievement_key?: string; interest_id?: string;
+      group_id?: string; group_name?: string; invite_id?: string; request_id?: string;
     }>; unread: number }>('/notifications'),
   markNotificationRead: (id: string) =>
     request<{ ok: boolean }>(`/notifications/${id}/read`, { method: 'POST' }),
@@ -456,12 +466,30 @@ export const api = {
     request<Group>('/groups/join', { method: 'POST', body: JSON.stringify({ invite_code }) }),
   leaveGroup: (id: string) => request<{ ok: boolean }>(`/groups/${id}/leave`, { method: 'POST' }),
   addGroupMember: (id: string, user_id: string) =>
-    request<Group>(`/groups/${id}/members`, { method: 'POST', body: JSON.stringify({ user_id }) }),
+    request<{ invited: boolean; invite_id: string; already_pending: boolean }>(
+      `/groups/${id}/members`, { method: 'POST', body: JSON.stringify({ user_id }) },
+    ),
+  respondGroupInvite: (groupId: string, inviteId: string, accept: boolean) =>
+    request<{ ok: boolean; status: 'accepted' | 'declined' }>(
+      `/groups/${groupId}/invites/${inviteId}/${accept ? 'accept' : 'decline'}`,
+      { method: 'POST' },
+    ),
   removeGroupMember: (id: string, user_id: string) =>
     request<{ ok: boolean }>(`/groups/${id}/members/${user_id}`, { method: 'DELETE' }),
   groupAddCandidates: (id: string, q = '') =>
     request<Array<{ id: string; display_name: string; avatar?: string | null }>>(
       `/groups/${id}/candidates?q=${encodeURIComponent(q)}`,
+    ),
+  groupPreview: (id: string) =>
+    request<GroupPreview>(`/groups/${id}/preview`),
+  requestJoinGroup: (id: string) =>
+    request<{ requested: boolean; request_id: string; already_pending: boolean }>(
+      `/groups/${id}/join-requests`, { method: 'POST' },
+    ),
+  respondJoinRequest: (groupId: string, requestId: string, approve: boolean) =>
+    request<{ ok: boolean; status: 'approved' | 'denied' }>(
+      `/groups/${groupId}/join-requests/${requestId}/${approve ? 'approve' : 'deny'}`,
+      { method: 'POST' },
     ),
   groupFeed: (id: string) => request<any[]>(`/groups/${id}/feed`),
   groupLeaderboard: (id: string, season?: number) =>
@@ -517,6 +545,27 @@ export type Group = {
   is_admin: boolean;
   is_member: boolean;
   members: Array<{ id: string; display_name: string; avatar?: string | null; handicap?: number | null; home_course?: string | null }>;
+};
+
+export type GroupPreview = {
+  id: string;
+  name: string;
+  description: string;
+  member_count: number;
+  max_members: number;
+  is_member: boolean;
+  is_admin: boolean;
+  admins: Array<{ id: string; display_name: string; avatar?: string | null; home_course?: string | null }>;
+  mutual_members: Array<{ id: string; display_name: string; avatar?: string | null }>;
+  pending_request_id: string | null;
+  created_at: string;
+};
+
+export type PublicGroup = {
+  id: string;
+  name: string;
+  description: string;
+  member_count: number;
 };
 
 export type ChatMessage = {

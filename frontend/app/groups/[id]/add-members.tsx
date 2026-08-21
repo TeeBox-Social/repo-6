@@ -60,7 +60,7 @@ export default function AddMembersScreen() {
       setAdded((prev) => ({ ...prev, [userId]: true }));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e: any) {
-      Alert.alert('Could not add', e?.message || `Failed to add ${name}.`);
+      Alert.alert('Could not invite', e?.message || `Failed to invite ${name}.`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     } finally {
       setAdding(null);
@@ -74,7 +74,7 @@ export default function AddMembersScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8} testID="add-members-back">
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.headerTitle}>Add members</Text>
+        <Text style={styles.headerTitle}>Invite members</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -98,7 +98,8 @@ export default function AddMembersScreen() {
           ) : null}
         </View>
         <Text style={styles.hint}>
-          Only people you follow or who follow you can be added directly.
+          Only people you follow or who follow you can be invited directly. They&apos;ll get a
+          notification to accept or decline.
         </Text>
       </View>
 
@@ -116,9 +117,9 @@ export default function AddMembersScreen() {
             <View style={styles.emptyIcon}>
               <Ionicons name="people-outline" size={30} color={colors.muted} />
             </View>
-            <Text style={styles.emptyTitle}>Nobody to add</Text>
+            <Text style={styles.emptyTitle}>Nobody to invite</Text>
             <Text style={styles.emptySub}>
-              Follow other TeeBox golfers first — you can only add people from your
+              Follow other TeeBox golfers first — you can only invite people from your
               connections. Anyone with the invite code can still join on their own.
             </Text>
           </View>
@@ -144,8 +145,8 @@ export default function AddMembersScreen() {
                 </View>
                 {isAdded ? (
                   <View style={styles.addedPill}>
-                    <Ionicons name="checkmark" size={12} color="#1B5E33" />
-                    <Text style={styles.addedText}>Added</Text>
+                    <Ionicons name="paper-plane" size={12} color="#1B5E33" />
+                    <Text style={styles.addedText}>Invite sent</Text>
                   </View>
                 ) : (
                   <Pressable
@@ -158,8 +159,8 @@ export default function AddMembersScreen() {
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <>
-                        <Ionicons name="add" size={14} color="#fff" />
-                        <Text style={styles.addBtnText}>Add</Text>
+                        <Ionicons name="paper-plane-outline" size={14} color="#fff" />
+                        <Text style={styles.addBtnText}>Invite</Text>
                       </>
                     )}
                   </Pressable>

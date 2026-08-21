@@ -86,6 +86,30 @@ const ROWS: PrefRow[] = [
     desc: 'When another golfer sends you a message.',
     icon: 'chatbubble-ellipses-outline',
   },
+  {
+    key: 'group_invite',
+    title: 'Group invites',
+    desc: 'When someone invites you to join a group.',
+    icon: 'people-circle-outline',
+  },
+  {
+    key: 'group_invite_response',
+    title: 'Group invite responses',
+    desc: 'When someone accepts or declines your group invite.',
+    icon: 'people-outline',
+  },
+  {
+    key: 'group_join_request',
+    title: 'Group join requests',
+    desc: 'When someone asks to join a group you admin.',
+    icon: 'person-add-outline',
+  },
+  {
+    key: 'group_join_response',
+    title: 'Group join responses',
+    desc: 'When your request to join a group is approved or denied.',
+    icon: 'checkmark-done-outline',
+  },
 ];
 
 export default function NotificationSettings() {

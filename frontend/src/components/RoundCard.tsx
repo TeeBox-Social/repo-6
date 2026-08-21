@@ -202,6 +202,23 @@ export function RoundCard({ round, onLike, onDeleted }: Props) {
         ) : null}
       </View>
 
+      {round.group_id && round.group_name ? (
+        <Pressable
+          testID={`round-card-group-badge-${round.id}`}
+          onPress={(e) => {
+            e?.stopPropagation?.();
+            Haptics.selectionAsync().catch(() => {});
+            router.push(`/groups/${round.group_id}` as any);
+          }}
+          style={styles.groupBadge}
+        >
+          <Ionicons name="people" size={12} color={colors.brandDeep} />
+          <Text style={styles.groupBadgeText} numberOfLines={1}>
+            Shared to {round.group_name}
+          </Text>
+        </Pressable>
+      ) : null}
+
       {/* Photo hero (only when a photo exists) */}
       {hasPhoto ? (
         <View style={styles.hero}>
@@ -508,6 +525,18 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 2,
   },
+  groupBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.brandTertiary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    marginTop: -4,
+  },
+  groupBadgeText: { fontSize: 11.5, fontWeight: '800', color: colors.brandDeep },
   hero: {
     height: 180,
     borderRadius: radius.md,

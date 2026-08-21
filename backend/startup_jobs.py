@@ -22,6 +22,8 @@ from db import (
     conversations_col,
     courses_col,
     follows_col,
+    group_invites_col,
+    group_join_requests_col,
     groups_col,
     import_jobs_col,
     lfg_interests_col,
@@ -106,6 +108,17 @@ async def ensure_indexes() -> None:
         await groups_col.create_index("invite_code", unique=True)
         await groups_col.create_index("member_ids")
         await groups_col.create_index("admin_id")
+
+        # Share-to-group posts: group's own private feed sort
+        await rounds_col.create_index([("group_id", 1), ("created_at", -1)])
+
+        # Group invites: invitee inbox + dedupe pending invites per group
+        await group_invites_col.create_index([("invitee_id", 1), ("status", 1)])
+        await group_invites_col.create_index([("group_id", 1), ("invitee_id", 1), ("status", 1)])
+
+        # Group join requests: admin review queue + dedupe pending requests
+        await group_join_requests_col.create_index([("group_id", 1), ("status", 1)])
+        await group_join_requests_col.create_index([("group_id", 1), ("user_id", 1), ("status", 1)])
 
         # Messaging: DM conversation lookup by pair + inbox sort; message
         # pagination by thread; read-receipt lookups by (thread, user).

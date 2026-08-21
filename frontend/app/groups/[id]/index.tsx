@@ -438,7 +438,7 @@ export default function GroupDetailScreen() {
                 <View style={styles.addMembersIcon}>
                   <Ionicons name="person-add" size={16} color="#fff" />
                 </View>
-                <Text style={styles.addMembersText}>Add members</Text>
+                <Text style={styles.addMembersText}>Invite members</Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </Pressable>
             ) : null}

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import (
     courses_col,
     follows_col,
+    groups_col,
     reviews_col,
     rounds_col,
     users_col,
@@ -86,9 +87,26 @@ async def get_user(user_id: str, user=Depends(get_current_user)):
             pinned_round = await enrich_round(pr, user["id"])
         else:
             await users_col.update_one({"id": user_id}, {"$unset": {"pinned_round_id": ""}})
+
+    # ---- Groups this user chose to surface on their profile ----
+    public_groups: list = []
+    public_group_ids = target.get("public_group_ids") or []
+    if public_group_ids:
+        async for g in groups_col.find(
+            {"id": {"$in": public_group_ids}, "member_ids": user_id},
+            {"_id": 0, "id": 1, "name": 1, "description": 1, "member_ids": 1},
+        ):
+            public_groups.append({
+                "id": g["id"],
+                "name": g["name"],
+                "description": g.get("description") or "",
+                "member_count": len(g.get("member_ids") or []),
+            })
+
     return {
         **public_user(target),
         "pinned_round": pinned_round,
+        "public_groups": public_groups,
         "round_count": round_count,
         "avg_score": avg_score,
         "courses_played": courses_played,
@@ -104,7 +122,12 @@ async def get_user(user_id: str, user=Depends(get_current_user)):
 
 @router.get("/users/{user_id}/rounds")
 async def get_user_rounds(user_id: str, user=Depends(get_current_user)):
-    cursor = rounds_col.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1)
+    query: dict = {"user_id": user_id}
+    if user["id"] != user_id:
+        # Group-shared posts stay inside that group's own feed — never shown
+        # on a profile page to viewers outside the group.
+        query["group_id"] = None
+    cursor = rounds_col.find(query, {"_id": 0}).sort("created_at", -1)
     return [await enrich_round(r, user["id"]) async for r in cursor]
 
 

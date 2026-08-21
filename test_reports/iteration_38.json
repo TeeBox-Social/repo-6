@@ -1,0 +1,40 @@
+{
+  "summary": "Tested 3 new TeeBox group features: (1) Share-to-group post creation with feed segregation, (2) Group invites with accept/decline, (3) Public groups on profile + request-to-join. Backend: 30/30 new pytest cases pass (100%), covering group-scoped post creation/visibility/403s, empty group-feed intentional behavior, pending invite creation (no immediate add), accept/decline + bidirectional notifications, public_group_ids server-side membership filtering + persistence, group preview (admin/mutual-friends/pending-state), and join-request approve/deny flows. Frontend (Playwright, 390x844, using reese/jordan/sam demo accounts): full E2E flow verified via real UI interactions — 'Share to' chip row renders correctly on Log screen, group-shared post appears in group feed with 'Shared to' badge, is excluded from general feed, is visible on author's own profile; Invite members screen shows 'Invite sent' pill (not 'Added'); invitee's notification shows inline Accept/Decline, tapping Accept adds to group and shows 'Joined the group' resolved pill, inviter gets notified; Edit Profile 'Groups on your profile' section with Switch toggles persists correctly (verified via real in-app navigation, not full browser reload); profile Groups section shows public groups as tappable cards leading to /groups/{id}/preview with correct admin/mutual-friends/CTA; join request flow (request -> admin notif with Approve/Deny -> approve -> member added -> requester notified) works end-to-end; Notification settings screen has all 4 new toggles (group_invite, group_invite_response, group_join_request, group_join_response). Regression: leaderboard and join-by-invite-code both still work correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter38_groups_feature.py",
+    "/app/test_reports/pytest/iter38_results.xml"
+  ],
+  "action_items": [
+    "No functional bugs found in the 3 new group features. All backend endpoints and frontend flows tested end-to-end pass."
+  ],
+  "critical_code_review_comments": [
+    "groups.py _respond_invite / _respond_join_request cleanly reuse a shared helper, idempotently return current status if already responded — good defensive coding.",
+    "rounds.py _assert_round_visible correctly gates GET/like/comment on group-shared rounds for non-members (403), verified via tests.",
+    "/feed and /users/{id}/rounds correctly filter group_id: None for the general feed / other-viewer profile view — verified no leakage.",
+    "emit_notification flattens 'extra' dict directly into the notification doc (not nested under an 'extra' key) — this is consistent with how notifications.tsx reads top-level fields (n.accepted, n.approved, n.invite_id, n.request_id) directly, so frontend/backend contract matches correctly. (Note for future test-writers: don't assume an 'extra' wrapper key exists — it doesn't.)",
+    "PATCH /auth/me server-side filters public_group_ids down to groups the user is still a member of — verified a supplied non-member group id is silently dropped rather than erroring, which is a reasonable UX choice.",
+    "Testing artifact note (not a product bug): using Playwright's page.goto() to navigate between in-app routes forces a full browser reload each time, which re-triggers the AuthProvider's async bootstrap and briefly renders profile/edit.tsx with a null user (since displayName/publicGroupIds are seeded via useState initializers off `user` at mount, with no re-sync effect if `user` arrives after mount). This looked like a 'toggle doesn't persist' bug at first, but retesting via real in-app UI taps (tab bar + Edit button, matching actual mobile navigation) confirmed the toggle DOES persist correctly and all fields populate correctly. Flagging only as a code-robustness note: if the app is ever server-rendered or deep-linked directly into /profile/edit before auth bootstrap resolves, the same stale-empty-fields issue could surface for real; a low-cost improvement would be a useEffect syncing local state when `user` changes post-mount, or gating the screen on `loading` from useAuth()."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter38_groups_feature.py (new pytest suite, 30 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30)",
+    "frontend": "100% of tested flows (share-to chip row, group feed inclusion/exclusion, group badge, invite pending/accept/decline + notifications, public-group toggle + persistence via real nav, profile Groups section, group preview CTA states, join-request request/approve/deny + notifications, notification-settings new toggles, leaderboard + join-by-code regression)"
+  },
+  "seed_data_creation": "Created several TEST_-prefixed groups and users via signup/API for isolated pytest fixtures (auto-cleaned via fixture teardown where applicable). For frontend testing, created group 'TEST_FE_Group2' (admin=reese) and used existing demo accounts (reese/jordan/sam) for invite + join-request flows; jordan's public_group_ids was set to include TEST_FE_Group2 via a setup API call before UI testing the profile Groups section. This test group and its state (jordan+sam members) remain in the DB as harmless leftover test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 3 new group features (share-to-group posts, group invites with accept/decline, public groups + request-to-join) are stable and fully working end-to-end on both backend and frontend. No bugs found. One process note for future testing agents: /api/notifications returns {notifications: [...], unread: n} (not a bare array), and emit_notification's 'extra' dict is flattened directly onto the notification document (fields like invite_id/request_id/accepted/approved live at the top level, not nested under 'extra') — matches what notifications.tsx expects. Also note: Playwright's page.goto() to an in-app route causes a full SPA reload (re-running AuthProvider bootstrap), which can transiently show stale/empty profile-edit fields; use real UI taps (tab bar, buttons) to simulate true in-app navigation when testing anything that seeds local state from the auth context user object.",
+  "rca_of_issue": "N/A — no functional bugs found in this session's 3 new features. The one apparent issue (Edit Profile fields/group-toggle appearing empty/reverted) was root-caused to a Playwright testing artifact (full browser reload via page.goto racing the async auth bootstrap), not a real app bug — confirmed by retesting with actual in-app tab/button navigation, which showed all fields and the toggle state correctly populated and persisted."
+}

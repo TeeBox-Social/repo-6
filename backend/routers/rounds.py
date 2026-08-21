@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from config import MAX_PHOTO_B64_LEN, MAX_PHOTOS_PER_ROUND
-from db import comments_col, follows_col, likes_col, rounds_col, users_col
+from db import comments_col, follows_col, groups_col, likes_col, rounds_col, users_col
 from helpers import (
     compute_achievement_defs,
     emit_notification,
@@ -18,6 +18,18 @@ from models import CommentIn, CommentUpdate, RoundIn, RoundUpdate
 from security import get_current_user
 
 router = APIRouter()
+
+
+async def _assert_round_visible(r: dict, viewer_id: str) -> None:
+    """Group-shared posts are only visible to the author and current members
+    of that group — everyone else gets a 403 even if they know the round id
+    (e.g. via a stale notification link)."""
+    gid = r.get("group_id")
+    if not gid or r.get("user_id") == viewer_id:
+        return
+    g = await groups_col.find_one({"id": gid}, {"_id": 0, "member_ids": 1})
+    if not g or viewer_id not in (g.get("member_ids") or []):
+        raise HTTPException(status_code=403, detail="This post is only visible to group members")
 
 
 # ---- Rounds ----
@@ -37,6 +49,17 @@ async def create_round(data: RoundIn, user=Depends(get_current_user)):
         # Body must contain SOMETHING so we don't feed empty posts.
         if not (data.notes or "").strip() and not photos:
             raise HTTPException(status_code=422, detail="Post cannot be empty")
+
+    # Share-to-group: verify membership so you can't tag a post into a group
+    # you don't belong to. A tagged post replaces the general-feed placement
+    # with the group's private feed (see /feed and /groups/{id}/feed).
+    group_id = None
+    if data.group_id:
+        g = await groups_col.find_one({"id": data.group_id}, {"_id": 0, "member_ids": 1})
+        if not g or user["id"] not in (g.get("member_ids") or []):
+            raise HTTPException(status_code=403, detail="You're not a member of that group")
+        group_id = data.group_id
+
     round_id = str(uuid.uuid4())
     doc = {
         "id": round_id,
@@ -58,6 +81,7 @@ async def create_round(data: RoundIn, user=Depends(get_current_user)):
         "hole_pars": data.hole_pars or [],
         "meetup_date": data.meetup_date if post_type == "lfg" else None,
         "looking_for_count": data.looking_for_count if post_type == "lfg" else None,
+        "group_id": group_id,
         "created_at": now_iso(),
     }
     # Only diff achievements for actual round posts.
@@ -124,10 +148,12 @@ async def get_feed(
     limit: int = Query(30, ge=1, le=100),
     user=Depends(get_current_user),
 ):
-    query: dict = {}
+    # Posts shared to a group only live in that group's feed — never leak
+    # them into the general/followers feed.
+    query: dict = {"group_id": None}
     if scope == "followers":
         following = [f["target_id"] async for f in follows_col.find({"user_id": user["id"]}, {"_id": 0, "target_id": 1})]
-        query = {"user_id": {"$in": following + [user["id"]]}}
+        query["user_id"] = {"$in": following + [user["id"]]}
     cursor = rounds_col.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
     return [await enrich_round(r, user["id"]) async for r in cursor]
 
@@ -137,6 +163,7 @@ async def get_round(round_id: str, user=Depends(get_current_user)):
     r = await rounds_col.find_one({"id": round_id}, {"_id": 0})
     if not r:
         raise HTTPException(status_code=404, detail="Round not found")
+    await _assert_round_visible(r, user["id"])
     return await enrich_round(r, user["id"])
 
 
@@ -158,6 +185,7 @@ async def toggle_like(round_id: str, user=Depends(get_current_user)):
     r = await rounds_col.find_one({"id": round_id})
     if not r:
         raise HTTPException(status_code=404, detail="Round not found")
+    await _assert_round_visible(r, user["id"])
     existing = await likes_col.find_one({"round_id": round_id, "user_id": user["id"]})
     if existing:
         await likes_col.delete_one({"round_id": round_id, "user_id": user["id"]})
@@ -191,6 +219,10 @@ async def toggle_like(round_id: str, user=Depends(get_current_user)):
 # ---- Comments ----
 @router.get("/rounds/{round_id}/comments")
 async def get_comments(round_id: str, user=Depends(get_current_user)):
+    r = await rounds_col.find_one({"id": round_id}, {"_id": 0, "user_id": 1, "group_id": 1})
+    if not r:
+        raise HTTPException(status_code=404, detail="Round not found")
+    await _assert_round_visible(r, user["id"])
     out = []
     async for c in comments_col.find({"round_id": round_id}, {"_id": 0}).sort("created_at", 1):
         author = await users_col.find_one({"id": c["user_id"]}, {"_id": 0, "hashed_password": 0})
@@ -213,6 +245,7 @@ async def add_comment(round_id: str, data: CommentIn, user=Depends(get_current_u
     r = await rounds_col.find_one({"id": round_id})
     if not r:
         raise HTTPException(status_code=404, detail="Round not found")
+    await _assert_round_visible(r, user["id"])
     # Merge client-provided mention ids with any @handles we can resolve from
     # the comment text itself. This ensures notifications still fire when a
     # user types "@Reese_Callahan" manually without tapping the autocomplete

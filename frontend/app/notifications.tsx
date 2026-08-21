@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +33,12 @@ type Notification = {
   actor_name?: string;
   achievement_key?: string;
   conversation_id?: string;
+  group_id?: string;
+  group_name?: string;
+  invite_id?: string;
+  request_id?: string;
+  accepted?: boolean;
+  approved?: boolean;
 };
 
 function iconForType(type: string): { icon: any; color: string } {
@@ -62,6 +69,14 @@ function iconForType(type: string): { icon: any; color: string } {
       return { icon: 'people', color: colors.brandPrimary };
     case 'direct_message':
       return { icon: 'chatbubble-ellipses', color: colors.brandPrimary };
+    case 'group_invite':
+      return { icon: 'people-circle', color: colors.brandPrimary };
+    case 'group_invite_response':
+      return { icon: 'people', color: colors.brandPrimary };
+    case 'group_join_request':
+      return { icon: 'person-add', color: colors.brandPrimary };
+    case 'group_join_response':
+      return { icon: 'checkmark-done', color: colors.brandPrimary };
     default:
       return { icon: 'notifications', color: colors.brandPrimary };
   }
@@ -92,8 +107,18 @@ function resolveNotificationTarget(n: Notification): string | null {
       // Unlike a rejected new-course submission, the course itself still
       // exists (only the suggested edit was declined) — link to it either way.
       return n.course_name ? `/course/${encodeURIComponent(n.course_name)}` : null;
+    case 'group_invite_response':
+      // Only navigable when the invite was accepted — a decline means the
+      // viewer (the inviter) is already a member, but there's nothing new
+      // to see beyond the group they already have.
+      return n.accepted && n.group_id ? `/groups/${n.group_id}` : null;
+    case 'group_join_response':
+      // Denied requests leave the viewer a non-member — the full group
+      // screen would 403, so only route through on approval.
+      return n.approved && n.group_id ? `/groups/${n.group_id}` : null;
     default:
-      // e.g. course_rejected — the course record no longer exists to open.
+      // e.g. course_rejected, group_invite, group_join_request — the last two
+      // are handled via inline Accept/Decline buttons instead of navigation.
       return null;
   }
 }
@@ -104,6 +129,8 @@ export default function NotificationsScreen() {
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [actionState, setActionState] = useState<Record<string, 'accepted' | 'declined' | 'approved' | 'denied'>>({});
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       const res = await api.listNotifications();
@@ -142,6 +169,36 @@ export default function NotificationsScreen() {
     if (target) router.push(target as any);
   };
 
+  const respondInvite = async (n: Notification, accept: boolean) => {
+    if (!n.group_id || !n.invite_id || actionLoading) return;
+    Haptics.selectionAsync().catch(() => {});
+    setActionLoading(n.id);
+    try {
+      const res = await api.respondGroupInvite(n.group_id, n.invite_id, accept);
+      setActionState((prev) => ({ ...prev, [n.id]: res.status }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Could not respond', e?.message || 'Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const respondJoinRequest = async (n: Notification, approve: boolean) => {
+    if (!n.group_id || !n.request_id || actionLoading) return;
+    Haptics.selectionAsync().catch(() => {});
+    setActionLoading(n.id);
+    try {
+      const res = await api.respondJoinRequest(n.group_id, n.request_id, approve);
+      setActionState((prev) => ({ ...prev, [n.id]: res.status }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Could not respond', e?.message || 'Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -173,6 +230,10 @@ export default function NotificationsScreen() {
           {items.map((n) => {
             const meta = iconForType(n.type);
             const target = resolveNotificationTarget(n);
+            const resolved = actionState[n.id];
+            const showInviteActions = n.type === 'group_invite' && !resolved;
+            const showJoinActions = n.type === 'group_join_request' && !resolved;
+            const busy = actionLoading === n.id;
             return (
               <Pressable
                 key={n.id}
@@ -188,6 +249,84 @@ export default function NotificationsScreen() {
                   <Text style={styles.cardTitle}>{n.title}</Text>
                   <Text style={styles.cardBody}>{n.body}</Text>
                   <Text style={styles.cardTime}>{new Date(n.created_at).toLocaleDateString()}</Text>
+
+                  {showInviteActions ? (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID={`notif-accept-${n.id}`}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          respondInvite(n, true);
+                        }}
+                        disabled={busy}
+                        style={[styles.actionBtnPrimary, busy && { opacity: 0.6 }]}
+                      >
+                        {busy ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.actionBtnPrimaryText}>Accept</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        testID={`notif-decline-${n.id}`}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          respondInvite(n, false);
+                        }}
+                        disabled={busy}
+                        style={[styles.actionBtnSecondary, busy && { opacity: 0.6 }]}
+                      >
+                        <Text style={styles.actionBtnSecondaryText}>Decline</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+
+                  {showJoinActions ? (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        testID={`notif-approve-${n.id}`}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          respondJoinRequest(n, true);
+                        }}
+                        disabled={busy}
+                        style={[styles.actionBtnPrimary, busy && { opacity: 0.6 }]}
+                      >
+                        {busy ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.actionBtnPrimaryText}>Approve</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        testID={`notif-deny-${n.id}`}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          respondJoinRequest(n, false);
+                        }}
+                        disabled={busy}
+                        style={[styles.actionBtnSecondary, busy && { opacity: 0.6 }]}
+                      >
+                        <Text style={styles.actionBtnSecondaryText}>Deny</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+
+                  {resolved ? (
+                    <View style={styles.resolvedPill}>
+                      <Ionicons
+                        name={resolved === 'accepted' || resolved === 'approved' ? 'checkmark-circle' : 'close-circle'}
+                        size={13}
+                        color={resolved === 'accepted' || resolved === 'approved' ? colors.brandPrimary : colors.muted}
+                      />
+                      <Text style={styles.resolvedText}>
+                        {resolved === 'accepted' ? 'Joined the group'
+                          : resolved === 'declined' ? 'Invite declined'
+                          : resolved === 'approved' ? 'Request approved'
+                          : 'Request denied'}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 {!n.read ? <View style={styles.unreadDot} /> : null}
                 {target ? (
@@ -254,4 +393,33 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     backgroundColor: colors.brandPrimary,
     marginTop: 6,
   },
+  actionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  actionBtnPrimary: {
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 12.5 },
+  actionBtnSecondary: {
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnSecondaryText: { color: colors.onSurface, fontWeight: '800', fontSize: 12.5 },
+  resolvedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  resolvedText: { fontSize: 12, fontWeight: '700', color: colors.muted },
 }));

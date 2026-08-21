@@ -74,6 +74,10 @@ NOTIFICATION_PREF_KEYS: set[str] = {
     "lfg_interest",           # someone said they're in for my LFG round
     "lfg_response",           # an organizer accepted/declined my join request
     "direct_message",         # someone sent me a direct message
+    "group_invite",           # someone invited me to a group
+    "group_invite_response",  # my group invite was accepted/declined
+    "group_join_request",     # someone asked to join a group I admin
+    "group_join_response",    # my request to join a group was approved/denied
 }
 DEFAULT_NOTIFICATION_PREFS = {k: True for k in NOTIFICATION_PREF_KEYS}
 

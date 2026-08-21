@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { colors, IMAGES, radius, shadow, spacing } from '@/src/theme';
 import { makeThemedSheet } from '@/src/theme';
 import { useTheme } from '@/src/theme-context';
@@ -340,6 +341,40 @@ export default function Profile() {
         />
       </View>
 
+      {profile.public_groups && profile.public_groups.length > 0 ? (
+        <View style={styles.section} testID="profile-groups">
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Groups</Text>
+            <Text style={styles.sectionCount}>{profile.public_groups.length}</Text>
+          </View>
+          <View style={{ gap: spacing.sm }}>
+            {profile.public_groups.map((g: any) => (
+              <Pressable
+                key={g.id}
+                testID={`profile-group-${g.id}`}
+                style={styles.groupCard}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  router.push(`/groups/${g.id}/preview` as any);
+                }}
+              >
+                <View style={styles.groupCardIcon}>
+                  <Ionicons name="people" size={18} color={colors.brandDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.groupCardTitle} numberOfLines={1}>{g.name}</Text>
+                  <Text style={styles.groupCardSub} numberOfLines={1}>
+                    {g.member_count} {g.member_count === 1 ? 'member' : 'members'}
+                    {g.description ? ` \u00b7 ${g.description}` : ''}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your rounds</Text>
         {profile.pinned_round ? (
@@ -572,4 +607,23 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.onSurface },
   emptySub: { fontSize: 13, color: colors.muted, textAlign: 'center' },
+  groupCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    ...shadow.soft,
+  },
+  groupCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupCardTitle: { fontSize: 14.5, fontWeight: '800', color: colors.onSurface },
+  groupCardSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
 }));

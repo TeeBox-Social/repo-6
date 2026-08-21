@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Image } from 'expo-image';
@@ -21,7 +22,7 @@ import { TBInput } from '@/src/components/TBInput';
 import { MentionInput } from '@/src/components/MentionInput';
 import { CourseAutocomplete } from '@/src/components/CourseAutocomplete';
 import { NotificationBell } from '@/src/components/NotificationBell';
-import { api } from '@/src/api';
+import { api, Group } from '@/src/api';
 
 // This screen doubles as the Share Intent target.
 // It accepts prefill params via deep link: teebox://share?course=X&score=82&par=72&notes=...
@@ -57,6 +58,14 @@ export default function LogRound() {
   const [prefillSource, setPrefillSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Share-to-group: when a group is picked, the post replaces its
+  // general-feed placement with that group's own private feed.
+  const [myGroups, setMyGroups] = useState<Group[]>([]);
+  const [shareGroupId, setShareGroupId] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.listMyGroups().then(setMyGroups).catch(() => setMyGroups([]));
+  }, []);
   // Par is now non-editable — the value is derived exclusively from the
   // selected course + holes + front/back-9 choice. The ref used to guard
   // against auto-overwrite when the user hand-edited Par; it stays here as a
@@ -250,6 +259,7 @@ export default function LogRound() {
     setPhotos([]);
     setPrefillSource(null);
     setErr(null);
+    setShareGroupId(null);
   };
 
   const onSubmit = async () => {
@@ -280,6 +290,7 @@ export default function LogRound() {
         post_type: postType,
         notes: notes.trim(),
         photos,
+        group_id: shareGroupId || undefined,
       };
       if (postType === 'round') {
         basePayload.course_name = courseName.trim();
@@ -378,6 +389,59 @@ export default function LogRound() {
               >
                 <Ionicons name="close" size={16} color={colors.onSurface} />
               </Pressable>
+            </View>
+          ) : null}
+
+          {myGroups.length > 0 ? (
+            <View style={{ gap: 6 }} testID="log-share-to-wrap">
+              <Text style={styles.dropdownLabel}>Share to</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.shareToRow}
+              >
+                <Pressable
+                  testID="log-share-everyone"
+                  onPress={() => {
+                    setShareGroupId(null);
+                    Haptics.selectionAsync().catch(() => {});
+                  }}
+                  style={[styles.shareToPill, !shareGroupId && styles.shareToPillActive]}
+                >
+                  <Ionicons
+                    name="globe-outline"
+                    size={13}
+                    color={!shareGroupId ? '#fff' : colors.onSurface}
+                  />
+                  <Text style={[styles.shareToPillText, !shareGroupId && styles.shareToPillTextActive]}>
+                    Everyone
+                  </Text>
+                </Pressable>
+                {myGroups.map((g) => {
+                  const active = shareGroupId === g.id;
+                  return (
+                    <Pressable
+                      key={g.id}
+                      testID={`log-share-group-${g.id}`}
+                      onPress={() => {
+                        setShareGroupId(g.id);
+                        Haptics.selectionAsync().catch(() => {});
+                      }}
+                      style={[styles.shareToPill, active && styles.shareToPillActive]}
+                    >
+                      <Ionicons name="people" size={13} color={active ? '#fff' : colors.onSurface} />
+                      <Text style={[styles.shareToPillText, active && styles.shareToPillTextActive]} numberOfLines={1}>
+                        {g.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Text style={styles.shareToHint}>
+                {shareGroupId
+                  ? 'Only members of this group will see this post — it won\u2019t appear in your general feed.'
+                  : 'Visible in your general feed to followers.'}
+              </Text>
             </View>
           ) : null}
 
@@ -744,6 +808,23 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   parChipValue: { fontSize: 17, fontWeight: '800', color: colors.onSurface },
   parChipHint: { fontSize: 11, fontWeight: '600', color: colors.muted, letterSpacing: 0.2 },
   dropdownLabel: { fontSize: 13, fontWeight: '700', color: colors.onSurface, letterSpacing: 0.2 },
+  shareToRow: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  shareToPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+    maxWidth: 160,
+  },
+  shareToPillActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  shareToPillText: { fontSize: 12.5, fontWeight: '700', color: colors.onSurface },
+  shareToPillTextActive: { color: '#fff' },
+  shareToHint: { fontSize: 11.5, color: colors.muted, lineHeight: 15 },
   notesInput: {
     minHeight: 90,
     textAlignVertical: 'top',

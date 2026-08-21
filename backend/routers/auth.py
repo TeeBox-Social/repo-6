@@ -20,7 +20,7 @@ from config import (
     SECRET_KEY,
     is_admin_user,
 )
-from db import refresh_tokens_col, users_col
+from db import groups_col, refresh_tokens_col, users_col
 from emailer import (
     build_reset_url,
     build_verify_url,
@@ -311,6 +311,21 @@ async def update_me(data: ProfileUpdate, user=Depends(get_current_user)):
             if k in NOTIFICATION_PREF_KEYS:
                 current[k] = bool(v)
         updates["notification_prefs"] = current
+    if "public_group_ids" in updates:
+        # Defensive filter: only groups the user is CURRENTLY a member of can
+        # be marked public — stops a stale id (left a group) or a spoofed id
+        # from leaking onto the profile.
+        requested = [g for g in (updates["public_group_ids"] or []) if g]
+        if requested:
+            member_group_ids = {
+                g["id"]
+                async for g in groups_col.find(
+                    {"id": {"$in": requested}, "member_ids": user["id"]}, {"_id": 0, "id": 1},
+                )
+            }
+            updates["public_group_ids"] = [g for g in requested if g in member_group_ids]
+        else:
+            updates["public_group_ids"] = []
     if updates:
         await users_col.update_one({"id": user["id"]}, {"$set": updates})
     fresh = await users_col.find_one({"id": user["id"]}, {"_id": 0, "hashed_password": 0})

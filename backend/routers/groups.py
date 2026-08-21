@@ -14,10 +14,11 @@ from __future__ import annotations
 import secrets
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from db import chat_reads_col, follows_col, groups_col, messages_col, rounds_col, users_col
+from db import chat_reads_col, follows_col, group_invites_col, group_join_requests_col, groups_col, messages_col, rounds_col, users_col
 from helpers import (
     batch_course_par_cache,
     emit_notification,
@@ -214,16 +215,19 @@ async def leave_group(group_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/groups/{group_id}/members")
-async def add_member(
+async def invite_member(
     group_id: str,
     data: GroupAddMemberIn,
     user=Depends(get_current_user),
 ):
+    """Send a group invite (pending accept/decline) instead of adding the
+    person outright — nobody should wake up in a group they never agreed to
+    join. The invitee sees this as a notification with Accept/Decline."""
     g = await _get_group_or_404(group_id)
     _require_member(g, user["id"])
     policy = g.get("member_add_policy") or "admin"
     if policy == "admin" and g.get("admin_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Only the admin can add members to this group")
+        raise HTTPException(status_code=403, detail="Only the admin can invite members to this group")
     members = g.get("member_ids") or []
     if len(members) >= MAX_GROUP_MEMBERS:
         raise HTTPException(status_code=413, detail="Group is full (50 member cap)")
@@ -234,22 +238,91 @@ async def add_member(
     target = await users_col.find_one({"id": data.user_id}, {"_id": 0, "hashed_password": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    await groups_col.update_one({"id": group_id}, {"$addToSet": {"member_ids": data.user_id}})
-    # Notify the added user.
+
+    existing_invite = await group_invites_col.find_one(
+        {"group_id": group_id, "invitee_id": data.user_id, "status": "pending"}, {"_id": 0},
+    )
+    if existing_invite:
+        return {"invited": True, "invite_id": existing_invite["id"], "already_pending": True}
+
+    invite_id = str(uuid.uuid4())
+    await group_invites_col.insert_one({
+        "id": invite_id,
+        "group_id": group_id,
+        "group_name": g["name"],
+        "inviter_id": user["id"],
+        "invitee_id": data.user_id,
+        "status": "pending",
+        "created_at": now_iso(),
+    })
     await emit_notification(
         user_id=data.user_id,
-        pref_key="follow",
-        type_="group_added",
-        title="Added to a group",
-        body=f'{user.get("display_name") or "Someone"} added you to "{g["name"]}".',
+        pref_key="group_invite",
+        type_="group_invite",
+        title="Group invite",
+        body=f'{user.get("display_name") or "Someone"} invited you to join "{g["name"]}".',
         extra={
             "group_id": group_id,
+            "invite_id": invite_id,
+            "group_name": g["name"],
             "actor_id": user["id"],
             "actor_name": user.get("display_name"),
         },
     )
-    fresh = await _get_group_or_404(group_id)
-    return _serialize_group(fresh, user["id"], await _fetch_members(fresh.get("member_ids") or []))
+    return {"invited": True, "invite_id": invite_id, "already_pending": False}
+
+
+async def _respond_invite(group_id: str, invite_id: str, accept: bool, user: dict) -> dict:
+    inv = await group_invites_col.find_one({"id": invite_id, "group_id": group_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv["invitee_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="This invite isn't for you")
+    if inv["status"] != "pending":
+        return {"ok": True, "status": inv["status"]}
+
+    g = await _get_group_or_404(group_id)
+    new_status = "accepted" if accept else "declined"
+    if accept:
+        members = g.get("member_ids") or []
+        if user["id"] not in members:
+            if len(members) >= MAX_GROUP_MEMBERS:
+                raise HTTPException(status_code=413, detail="Group is full (50 member cap)")
+            await groups_col.update_one({"id": group_id}, {"$addToSet": {"member_ids": user["id"]}})
+
+    await group_invites_col.update_one(
+        {"id": invite_id}, {"$set": {"status": new_status, "responded_at": now_iso()}},
+    )
+    await emit_notification(
+        user_id=inv["inviter_id"],
+        pref_key="group_invite_response",
+        type_="group_invite_response",
+        title="Invite accepted" if accept else "Invite declined",
+        body=(
+            f'{user.get("display_name") or "Someone"} joined "{g["name"]}" after your invite.'
+            if accept else
+            f'{user.get("display_name") or "Someone"} declined your invite to "{g["name"]}".'
+        ),
+        extra={
+            "group_id": group_id,
+            "invite_id": invite_id,
+            "group_name": g["name"],
+            "actor_id": user["id"],
+            "actor_name": user.get("display_name"),
+            "accepted": accept,
+        },
+    )
+    return {"ok": True, "status": new_status}
+
+
+@router.post("/groups/{group_id}/invites/{invite_id}/accept")
+async def accept_group_invite(group_id: str, invite_id: str, user=Depends(get_current_user)):
+    return await _respond_invite(group_id, invite_id, True, user)
+
+
+@router.post("/groups/{group_id}/invites/{invite_id}/decline")
+async def decline_group_invite(group_id: str, invite_id: str, user=Depends(get_current_user)):
+    return await _respond_invite(group_id, invite_id, False, user)
 
 
 @router.delete("/groups/{group_id}/members/{user_id}")
@@ -312,6 +385,145 @@ async def list_add_candidates(
     return out
 
 
+# ---- Public groups on a profile: preview + request-to-join ----
+@router.get("/groups/{group_id}/preview")
+async def group_preview(group_id: str, user=Depends(get_current_user)):
+    """Non-member-safe preview shown when someone taps a public group off of
+    another user's profile — admin(s), mutual friends already inside, and
+    whether the viewer already has a pending join request."""
+    g = await _get_group_or_404(group_id)
+    member_ids = g.get("member_ids") or []
+    is_member = user["id"] in member_ids
+
+    admin = await users_col.find_one(
+        {"id": g.get("admin_id")}, {"_id": 0, "hashed_password": 0, "email": 0},
+    )
+
+    mutual_members: list[dict] = []
+    pending_request_id: Optional[str] = None
+    if not is_member:
+        following_ids = {f["target_id"] async for f in follows_col.find({"user_id": user["id"]}, {"_id": 0, "target_id": 1})}
+        follower_ids = {f["user_id"] async for f in follows_col.find({"target_id": user["id"]}, {"_id": 0, "user_id": 1})}
+        friend_ids = following_ids & follower_ids
+        mutual_ids = [m for m in member_ids if m in friend_ids][:8]
+        if mutual_ids:
+            async for u in users_col.find(
+                {"id": {"$in": mutual_ids}}, {"_id": 0, "hashed_password": 0, "email": 0},
+            ):
+                mutual_members.append(public_user(u))
+        pr = await group_join_requests_col.find_one(
+            {"group_id": group_id, "user_id": user["id"], "status": "pending"}, {"_id": 0, "id": 1},
+        )
+        pending_request_id = pr["id"] if pr else None
+
+    return {
+        "id": g["id"],
+        "name": g["name"],
+        "description": g.get("description") or "",
+        "member_count": len(member_ids),
+        "max_members": MAX_GROUP_MEMBERS,
+        "is_member": is_member,
+        "is_admin": user["id"] == g.get("admin_id"),
+        "admins": [public_user(admin)] if admin else [],
+        "mutual_members": mutual_members,
+        "pending_request_id": pending_request_id,
+        "created_at": g.get("created_at"),
+    }
+
+
+@router.post("/groups/{group_id}/join-requests")
+async def request_to_join_group(group_id: str, user=Depends(get_current_user)):
+    g = await _get_group_or_404(group_id)
+    member_ids = g.get("member_ids") or []
+    if user["id"] in member_ids:
+        raise HTTPException(status_code=400, detail="You're already a member")
+    if len(member_ids) >= MAX_GROUP_MEMBERS:
+        raise HTTPException(status_code=413, detail="Group is full (50 member cap)")
+
+    existing = await group_join_requests_col.find_one(
+        {"group_id": group_id, "user_id": user["id"], "status": "pending"}, {"_id": 0},
+    )
+    if existing:
+        return {"requested": True, "request_id": existing["id"], "already_pending": True}
+
+    request_id = str(uuid.uuid4())
+    await group_join_requests_col.insert_one({
+        "id": request_id,
+        "group_id": group_id,
+        "group_name": g["name"],
+        "user_id": user["id"],
+        "status": "pending",
+        "created_at": now_iso(),
+    })
+    admin_id = g.get("admin_id")
+    if admin_id:
+        await emit_notification(
+            user_id=admin_id,
+            pref_key="group_join_request",
+            type_="group_join_request",
+            title="Join request",
+            body=f'{user.get("display_name") or "Someone"} wants to join "{g["name"]}".',
+            extra={
+                "group_id": group_id,
+                "request_id": request_id,
+                "group_name": g["name"],
+                "actor_id": user["id"],
+                "actor_name": user.get("display_name"),
+            },
+        )
+    return {"requested": True, "request_id": request_id, "already_pending": False}
+
+
+async def _respond_join_request(group_id: str, request_id: str, approve: bool, user: dict) -> dict:
+    g = await _get_group_or_404(group_id)
+    _require_admin(g, user["id"])
+    req = await group_join_requests_col.find_one({"id": request_id, "group_id": group_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req["status"] != "pending":
+        return {"ok": True, "status": req["status"]}
+
+    new_status = "approved" if approve else "denied"
+    if approve:
+        members = g.get("member_ids") or []
+        if req["user_id"] not in members:
+            if len(members) >= MAX_GROUP_MEMBERS:
+                raise HTTPException(status_code=413, detail="Group is full (50 member cap)")
+            await groups_col.update_one({"id": group_id}, {"$addToSet": {"member_ids": req["user_id"]}})
+
+    await group_join_requests_col.update_one(
+        {"id": request_id}, {"$set": {"status": new_status, "responded_at": now_iso()}},
+    )
+    await emit_notification(
+        user_id=req["user_id"],
+        pref_key="group_join_response",
+        type_="group_join_response",
+        title="You're in!" if approve else "Join request update",
+        body=(
+            f'Your request to join "{g["name"]}" was approved.'
+            if approve else
+            f'Your request to join "{g["name"]}" was declined.'
+        ),
+        extra={
+            "group_id": group_id,
+            "request_id": request_id,
+            "group_name": g["name"],
+            "approved": approve,
+        },
+    )
+    return {"ok": True, "status": new_status}
+
+
+@router.post("/groups/{group_id}/join-requests/{request_id}/approve")
+async def approve_join_request(group_id: str, request_id: str, user=Depends(get_current_user)):
+    return await _respond_join_request(group_id, request_id, True, user)
+
+
+@router.post("/groups/{group_id}/join-requests/{request_id}/deny")
+async def deny_join_request(group_id: str, request_id: str, user=Depends(get_current_user)):
+    return await _respond_join_request(group_id, request_id, False, user)
+
+
 # ---- Feed ----
 @router.get("/groups/{group_id}/feed")
 async def group_feed(
@@ -321,11 +533,10 @@ async def group_feed(
 ):
     g = await _get_group_or_404(group_id)
     _require_member(g, user["id"])
-    member_ids = g.get("member_ids") or []
-    if not member_ids:
-        return []
+    # Only posts explicitly shared to this group (see the log screen's
+    # "Share to" picker) — not every public round every member has posted.
     cursor = rounds_col.find(
-        {"user_id": {"$in": member_ids}},
+        {"group_id": group_id},
         {"_id": 0},
     ).sort("created_at", -1).limit(limit)
     return [await enrich_round(r, user["id"]) async for r in cursor]

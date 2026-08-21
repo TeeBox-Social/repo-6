@@ -46,6 +46,9 @@ class RoundIn(BaseModel):
     post_type: Optional[str] = Field(default="round", pattern="^(round|text|lfg)$")
     meetup_date: Optional[str] = None
     looking_for_count: Optional[int] = Field(default=None, ge=1, le=8)
+    # Share-to-group: when set, this post only appears in that group's feed
+    # instead of the general/followers feed (see rounds.py + groups.py).
+    group_id: Optional[str] = Field(default=None, max_length=80)
 
 
 class RoundUpdate(BaseModel):
@@ -92,6 +95,9 @@ class ProfileUpdate(BaseModel):
     bio: Optional[str] = Field(default=None, max_length=280)
     avatar: Optional[str] = None  # base64
     notification_prefs: Optional[dict] = None
+    # Groups this user has chosen to surface publicly on their profile page.
+    # Server-side filters this down to groups the user is still a member of.
+    public_group_ids: Optional[List[str]] = None
 
 
 class WishlistIn(BaseModel):

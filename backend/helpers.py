@@ -18,6 +18,7 @@ from config import NOTIFICATION_PREF_KEYS
 from db import (
     comments_col,
     courses_col,
+    groups_col,
     lfg_interests_col,
     likes_col,
     notifications_col,
@@ -275,6 +276,14 @@ async def enrich_round(r: dict, viewer_id: Optional[str], like_count_map: Option
             "lfg_my_interest": my_interest,
         }
 
+    # ---- Share-to-group: surface the group's name so the client can show a
+    # "Shared to <Group>" badge without a second round-trip. ----
+    group_name: Optional[str] = None
+    gid = r.get("group_id")
+    if gid:
+        g = await groups_col.find_one({"id": gid}, {"_id": 0, "name": 1})
+        group_name = g.get("name") if g else None
+
     return {
         **r,
         "author": {
@@ -288,6 +297,7 @@ async def enrich_round(r: dict, viewer_id: Optional[str], like_count_map: Option
         "comment_count": comment_count,
         "liked_by_me": liked_by_me,
         "new_achievements": r.get("new_achievements") or [],
+        "group_name": group_name,
         **lfg_extra,
     }
 
