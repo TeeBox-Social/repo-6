@@ -2,7 +2,31 @@ import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-rout
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useState } from 'react';
-import { LogBox, Platform, StatusBar, View, Text, Pressable } from 'react-native';
+import { LogBox, Platform, StatusBar, View, Text, TextInput, Pressable } from 'react-native';
+
+// -----------------------------------------------------------------------------
+// Global font-scale ceiling for app chrome/UI.
+// Some users crank iOS Dynamic Type / Android font size to the max accessibility
+// setting (up to ~3.1x). Without a cap, our headers, tab labels and pill chips
+// wrap one letter per line and destroy the layout. Cap the multiplier at 1.3 so
+// we still respect accessibility (+30% is plenty for chrome) while keeping the
+// visual hierarchy intact. Individual long-form Text nodes (post bodies, etc.)
+// can override this by explicitly passing maxFontSizeMultiplier={2} if desired.
+// -----------------------------------------------------------------------------
+// @ts-ignore - RN types don't expose defaultProps but the runtime supports it.
+Text.defaultProps = Text.defaultProps || {};
+// @ts-ignore
+if (Text.defaultProps.maxFontSizeMultiplier == null) {
+  // @ts-ignore
+  Text.defaultProps.maxFontSizeMultiplier = 1.3;
+}
+// @ts-ignore
+TextInput.defaultProps = TextInput.defaultProps || {};
+// @ts-ignore
+if (TextInput.defaultProps.maxFontSizeMultiplier == null) {
+  // @ts-ignore
+  TextInput.defaultProps.maxFontSizeMultiplier = 1.3;
+}
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';

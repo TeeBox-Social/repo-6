@@ -112,9 +112,13 @@ export default function Feed() {
   const header = (
     <SafeAreaView edges={['top']} style={styles.headerSafe}>
       <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.hello}>Hi {user?.display_name?.split(' ')[0] || 'Golfer'}</Text>
-          <Text style={styles.headerTitle}>The Feed</Text>
+        <View style={styles.headerTitleCol}>
+          <Text style={styles.hello} numberOfLines={1}>
+            Hi {user?.display_name?.split(' ')[0] || 'Golfer'}
+          </Text>
+          <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            The Feed
+          </Text>
         </View>
         <NotificationBell testID="header-notifications" />
         <DMButton testID="header-messages" />
@@ -124,7 +128,7 @@ export default function Feed() {
           style={styles.headerCta}
         >
           <Ionicons name="person" size={18} color="#fff" />
-          <Text style={styles.headerCtaText}>My Profile</Text>
+          <Text style={styles.headerCtaText} numberOfLines={1}>My Profile</Text>
         </Pressable>
       </View>
       <View style={styles.filterRow} testID="feed-filter-row">
@@ -322,6 +326,7 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     paddingBottom: spacing.md,
     gap: spacing.md,
   },
+  headerTitleCol: { flex: 1, minWidth: 0 },
   hello: { fontSize: 13, color: colors.muted, fontWeight: '700', letterSpacing: 0.4 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: colors.onSurface, marginTop: 2 },
   headerCta: {
@@ -333,6 +338,7 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.pill,
     ...shadow.soft,
+    flexShrink: 0,
   },
   headerCtaText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   filterRow: {
