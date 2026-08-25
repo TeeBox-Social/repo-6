@@ -116,7 +116,7 @@ export default function Feed() {
           <Text style={styles.hello} numberOfLines={1}>
             Hi {user?.display_name?.split(' ')[0] || 'Golfer'}
           </Text>
-          <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          <Text style={styles.headerTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>
             The Feed
           </Text>
         </View>

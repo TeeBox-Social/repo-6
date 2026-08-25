@@ -337,11 +337,11 @@ export default function LogRound() {
       <SafeAreaView edges={['top']} style={styles.headerSafe}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {postType === 'round' ? 'Log a round' : postType === 'lfg' ? 'Looking for group' : 'New post'}
               </Text>
-              <Text style={styles.subtitle}>
+              <Text style={styles.subtitle} numberOfLines={2}>
                 {postType === 'round'
                   ? 'Give the group chat something to talk about.'
                   : postType === 'lfg'
@@ -349,7 +349,7 @@ export default function LogRound() {
                     : 'Share a thought, tip, or story with your circle.'}
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
               <DMButton testID="log-header-messages" />
               <NotificationBell />
             </View>

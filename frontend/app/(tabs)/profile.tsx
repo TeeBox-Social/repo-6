@@ -162,11 +162,11 @@ export default function Profile() {
           <Pressable
             testID="profile-edit"
             onPress={() => router.push('/profile/edit')}
-            style={[styles.iconBtn, { flexDirection: 'row', paddingHorizontal: spacing.md, width: undefined, gap: 4 }]}
+            style={[styles.iconBtn, { flexDirection: 'row', paddingHorizontal: spacing.md, width: undefined, gap: 4, flexShrink: 0 }]}
             hitSlop={8}
           >
             <Ionicons name="create-outline" size={16} color="#fff" />
-            <Text style={styles.iconBtnText}>Edit</Text>
+            <Text style={styles.iconBtnText} numberOfLines={1}>Edit</Text>
           </Pressable>
           <Pressable
             testID="profile-signout"
@@ -190,7 +190,7 @@ export default function Profile() {
       </View>
 
       <View style={styles.identity}>
-        <Text style={styles.name} testID="profile-name">
+        <Text style={styles.name} testID="profile-name" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>
           {profile.display_name}
           {profile.handicap != null ? (
             <Text style={styles.nameHc}> · {profile.handicap} HCP</Text>

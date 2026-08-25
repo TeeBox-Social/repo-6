@@ -133,7 +133,7 @@ export default function Discover() {
       <SafeAreaView edges={['top']} style={styles.headerSafe}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <Text style={styles.title}>Discover</Text>
+            <Text style={styles.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>Discover</Text>
             <View style={styles.headerIcons}>
               <DMButton testID="discover-header-messages" />
               <NotificationBell />
@@ -437,9 +437,9 @@ const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   headerSafe: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
-  title: { fontSize: 26, fontWeight: '800', color: colors.onSurface },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  title: { fontSize: 26, fontWeight: '800', color: colors.onSurface, flexShrink: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
