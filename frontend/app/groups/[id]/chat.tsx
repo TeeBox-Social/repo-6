@@ -19,6 +19,10 @@ export default function GroupChatScreen() {
 
   const fetchMessages = useCallback((before?: string) => api.groupChatMessages(groupId, before), [groupId]);
   const sendMessage = useCallback((text: string) => api.sendGroupChatMessage(groupId, text), [groupId]);
+  const reactToMessage = useCallback(
+    (messageId: string, emoji: string) => api.reactGroupChatMessage(groupId, messageId, emoji),
+    [groupId],
+  );
   const markRead = useCallback(() => {
     api.markGroupChatRead(groupId).catch(() => {});
   }, [groupId]);
@@ -45,6 +49,7 @@ export default function GroupChatScreen() {
           threadType="group"
           fetchMessages={fetchMessages}
           sendMessage={sendMessage}
+          reactToMessage={reactToMessage}
           markRead={markRead}
           showSenderNames
           emptyTitle="No messages yet"

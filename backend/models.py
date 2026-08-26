@@ -208,3 +208,10 @@ class MessageIn(BaseModel):
 
 class GroupChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+# Chat message reactions. `emoji` is a single grapheme picked from a curated
+# frontend set (👍 ❤️ 😂 😮 🔥 🎉 ⛳). We cap length so the client can't smuggle
+# arbitrary long strings in as reaction keys.
+class ReactionIn(BaseModel):
+    emoji: str = Field(min_length=1, max_length=8)

@@ -27,7 +27,7 @@ from helpers import (
     now_iso,
     public_user,
 )
-from models import GroupAddMemberIn, GroupChatIn, GroupIn, GroupJoinIn, GroupUpdate
+from models import GroupAddMemberIn, GroupChatIn, GroupIn, GroupJoinIn, GroupUpdate, ReactionIn
 from security import get_current_user
 
 router = APIRouter()
@@ -692,6 +692,8 @@ async def group_chat_messages(
     }
     for m in msgs:
         m["sender"] = senders.get(m["sender_id"])
+        # Always return a `reactions` dict so the client can trust the shape.
+        m.setdefault("reactions", {})
     return msgs
 
 
@@ -708,6 +710,7 @@ async def send_group_chat_message(group_id: str, data: GroupChatIn, user=Depends
         "thread_id": group_id,
         "sender_id": user["id"],
         "text": text,
+        "reactions": {},
         "created_at": now_iso(),
     }
     await messages_col.insert_one(doc)
@@ -720,6 +723,56 @@ async def send_group_chat_message(group_id: str, data: GroupChatIn, user=Depends
     out.pop("_id", None)
     out["sender"] = public_user(user)
     return out
+
+
+# ---- Reactions on group chat messages ---------------------------------------
+# Curated allow-list so users can't stuff arbitrary text in as a reaction key.
+# Keep this list in sync with `EMOJI_REACTIONS` on the client
+# (`src/components/ChatThread.tsx`).
+ALLOWED_REACTIONS = {"👍", "❤️", "😂", "😮", "🔥", "🎉", "⛳"}
+
+
+@router.post("/groups/{group_id}/chat/{message_id}/react")
+async def toggle_group_chat_reaction(
+    group_id: str,
+    message_id: str,
+    data: ReactionIn,
+    user=Depends(get_current_user),
+):
+    """Toggle the caller's reaction to a single group-chat message.
+
+    Idempotent: sending the same emoji twice removes the reaction, sending
+    a different emoji adds it (a single user can react with multiple emojis
+    simultaneously — same behavior as Slack / iMessage).
+    """
+    g = await _get_group_or_404(group_id)
+    _require_member(g, user["id"])
+    emoji = data.emoji.strip()
+    if emoji not in ALLOWED_REACTIONS:
+        raise HTTPException(status_code=400, detail="Unsupported reaction")
+    msg = await messages_col.find_one(
+        {"id": message_id, "thread_type": "group", "thread_id": group_id},
+        {"_id": 0},
+    )
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    reactions: dict[str, list[str]] = dict(msg.get("reactions") or {})
+    current = list(reactions.get(emoji) or [])
+    uid = user["id"]
+    if uid in current:
+        current.remove(uid)
+    else:
+        current.append(uid)
+    if current:
+        reactions[emoji] = current
+    else:
+        # Drop empty keys to keep the doc small.
+        reactions.pop(emoji, None)
+    await messages_col.update_one(
+        {"id": message_id, "thread_type": "group", "thread_id": group_id},
+        {"$set": {"reactions": reactions}},
+    )
+    return {"id": message_id, "reactions": reactions}
 
 
 @router.post("/groups/{group_id}/chat/read")

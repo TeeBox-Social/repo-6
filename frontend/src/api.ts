@@ -513,6 +513,11 @@ export const api = {
     request<ChatMessage>(`/groups/${id}/chat`, { method: 'POST', body: JSON.stringify({ text }) }),
   markGroupChatRead: (id: string) =>
     request<{ ok: boolean }>(`/groups/${id}/chat/read`, { method: 'POST' }),
+  reactGroupChatMessage: (groupId: string, messageId: string, emoji: string) =>
+    request<{ id: string; reactions: Record<string, string[]> }>(
+      `/groups/${groupId}/chat/${messageId}/react`,
+      { method: 'POST', body: JSON.stringify({ emoji }) },
+    ),
 
   // ---- Direct messaging ----
   startConversation: (user_id: string) =>
@@ -575,6 +580,7 @@ export type ChatMessage = {
   sender_id: string;
   text: string;
   created_at: string;
+  reactions?: Record<string, string[]>; // emoji -> [user_id, ...]
   sender?: { id: string; display_name: string; avatar?: string | null } | null;
 };
 

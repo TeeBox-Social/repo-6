@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 40 tests the new Group Chat Reactions feature end-to-end. Backend: 15/15 pytest tests pass covering the new POST /api/groups/{gid}/chat/{mid}/react toggle endpoint (add/remove idempotency), allow-list validation (400 for '💩'), non-member 403 (fresh registered outsider), missing-message 404, missing-group 404, `reactions` field enrichment on GET /chat, `reactions: {}` on freshly created message via POST /chat, and multi-user aggregation (same emoji from two users + different emoji + partial toggle-off). All 7 allow-listed emojis are accepted. Frontend: verified end-to-end on mobile viewport (390x844) with reese@teebox.demo — long-press on a group chat message bubble opens the reaction picker modal exposing all 7 emojis (chat-picker-<emoji>), tapping an emoji adds a reaction chip (chat-reaction-<mid>-<emoji>), tapping the chip toggles the reaction off, and re-adding a different emoji renders a new chip. DM regression verified — thread mounts fine without reactToMessage prop and long-press on DM bubble correctly does NOT open the picker (reactions are group-only by design). No new console errors introduced; only pre-existing 'shadow*'/'pointerEvents' RN-web deprecation warnings observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "verified_flows": [
+    "POST /api/groups/{gid}/chat/{mid}/react adds reaction on first call (reactions.{emoji} = [uid])",
+    "POST /api/groups/{gid}/chat/{mid}/react removes reaction on second call (emoji key dropped)",
+    "POST reactions with emoji outside allow-list ('💩') returns 400 'Unsupported reaction'",
+    "POST reactions from a non-member (freshly registered outsider) returns 403 'Not a group member'",
+    "POST reactions to unknown message_id returns 404 'Message not found'",
+    "POST reactions to unknown group_id returns 404 'Group not found'",
+    "GET /api/groups/{gid}/chat: each message returns 'reactions' dict ({} when none, {emoji:[uids]} otherwise)",
+    "POST /api/groups/{gid}/chat: freshly created message includes 'reactions': {} inline in response",
+    "Multi-user aggregation: two users hitting the same 🔥 -> reactions[🔥] = [both uids]; toggling one off preserves the other",
+    "Same user reacting with different emojis simultaneously supported (Slack-like)",
+    "All 7 allow-listed emojis (👍 ❤️ 😂 😮 🔥 🎉 ⛳) accepted via parametrized test",
+    "Frontend: group chat send/receive still works; picker modal (chat-picker-<emoji>) renders all 7 emojis after long-press on chat-bubble-<id>",
+    "Frontend: tapping picker emoji creates chat-reaction-<mid>-<emoji> chip; tapping the chip toggles the user's reaction off",
+    "Frontend regression: DM list + DM thread still work; DM bubble long-press correctly does NOT open picker (reactToMessage not wired for DMs)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter40_group_chat_reactions.py",
+    "/app/test_reports/pytest/iter40_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ChatThread.tsx: onReact captures `previous` via closure inside setMessages updater — works, but the rollback path only restores a single message shape; if the server response arrives out of order after multiple rapid toggles, the final state may briefly disagree with the server. Consider request-sequencing per message id if this becomes a UX issue.",
+    "groups.py toggle_group_chat_reaction performs a read-modify-write on `reactions` without transactional guards. Concurrent toggles from two members on the same emoji could race (last-writer-wins). Given the low-contention chat scenario and the toggle semantics, this is acceptable, but a $push/$pull atomic update on the specific emoji key would be more precise.",
+    "ChatThread.tsx line 232: Object.entries(item.reactions || {}) iteration order is not guaranteed for non-integer keys in ES2015+ — chips may re-order between renders if reactions are removed and re-added. Consider a stable sort (e.g., by EMOJI_REACTIONS index) for deterministic chip order.",
+    "Backend ALLOWED_REACTIONS uses '❤️' (with U+FE0F variation selector). If a client sends the bare '❤' (U+2764) without VS-16, it will 400 despite being visually identical. Not observed in this feature's own client, but worth documenting.",
+    "The reaction endpoint has no rate limit — a client could spam toggles. Existing app-level rate limit middleware may cover it, but worth confirming."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter40_group_chat_reactions.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (all verified flows passed)"},
+  "seed_data_creation": "Created ephemeral group TEST_iter40_<hex> via reese@teebox.demo; invited jordan@teebox.demo; sent one chat message. Registered one throwaway user TEST_iter40_outsider_<hex>@example.com for the 403 non-member test. Group is deleted in the fixture teardown so no state leaks.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend reaction toggle endpoint: POST /api/groups/{gid}/chat/{mid}/react body {emoji}. Allowed emojis: 👍 ❤️ 😂 😮 🔥 🎉 ⛳. testIDs on frontend: chat-bubble-<id>, chat-picker-<emoji>, chat-reaction-<mid>-<emoji>, chat-reaction-backdrop, chat-input, chat-send. Long-press works via mouse.down + 600ms wait + mouse.up on web (delayLongPress is 220ms). Note kurt@teebox.demo login returned 401 during testing — either password changed or user not seeded; used a freshly registered user for the 403 test instead.",
+  "rca_of_issue": "N/A — no bugs observed. All 15 backend tests and all frontend flows pass."
+}
