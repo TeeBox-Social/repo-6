@@ -23,6 +23,7 @@ import { MentionInput } from '@/src/components/MentionInput';
 import { CourseAutocomplete } from '@/src/components/CourseAutocomplete';
 import { NotificationBell } from '@/src/components/NotificationBell';
 import { DMButton } from '@/src/components/DMButton';
+import { AdBanner } from '@/src/components/AdBanner';
 import { api, Group } from '@/src/api';
 
 // This screen doubles as the Share Intent target.
@@ -670,6 +671,8 @@ export default function LogRound() {
           </View>
       </KeyboardAwareScrollView>
 
+      <AdBanner style={styles.adBanner} />
+
       {loading ? (
         <View style={styles.overlay}>
           <ActivityIndicator color={colors.brandPrimary} size="large" />
@@ -681,6 +684,12 @@ export default function LogRound() {
 
 const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  adBanner: {
+    backgroundColor: colors.surfaceSecondary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.xs,
+  },
   headerSafe: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
   title: { fontSize: 26, fontWeight: '800', color: colors.onSurface },

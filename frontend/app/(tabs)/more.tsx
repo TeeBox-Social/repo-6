@@ -7,6 +7,7 @@ import { colors, radius, shadow, spacing } from '@/src/theme';
 import { makeThemedSheet } from '@/src/theme';
 import { useTheme } from '@/src/theme-context';
 import { useAuth } from '@/src/auth-context';
+import { AdBanner } from '@/src/components/AdBanner';
 
 type RowProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -146,12 +147,20 @@ export default function MoreScreen() {
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
       </ScrollView>
+
+      <AdBanner style={styles.adBanner} />
     </SafeAreaView>
   );
 }
 
 const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  adBanner: {
+    backgroundColor: colors.surfaceSecondary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.xs,
+  },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   headerTitle: { fontSize: 30, fontWeight: '800', color: colors.onSurface },
   row: {

@@ -19,7 +19,6 @@ import { useTheme } from '@/src/theme-context';
 import { api } from '@/src/api';
 import { RoundCard } from '@/src/components/RoundCard';
 import { FeedNativeAd } from '@/src/components/FeedNativeAd';
-import { AdBanner } from '@/src/components/AdBanner';
 import { useAuth } from '@/src/auth-context';
 import { TBButton } from '@/src/components/TBButton';
 import { NotificationBell } from '@/src/components/NotificationBell';
@@ -240,7 +239,6 @@ export default function Feed() {
           ) : null
         }
       />
-      <AdBanner style={styles.adBanner} />
     </View>
   );
 }
@@ -303,12 +301,6 @@ function VerifyBanner() {
 const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   center: { flex: 1, backgroundColor: colors.surface },
-  adBanner: {
-    backgroundColor: colors.surfaceSecondary,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.xs,
-  },
   headerGlass: {
     position: 'absolute',
     top: 0,

@@ -22,6 +22,7 @@ import { api } from '@/src/api';
 import { useAuth } from '@/src/auth-context';
 import { NotificationBell } from '@/src/components/NotificationBell';
 import { DMButton } from '@/src/components/DMButton';
+import { AdBanner } from '@/src/components/AdBanner';
 
 type Tab = 'golfers' | 'courses';
 type LocationState =
@@ -218,6 +219,7 @@ export default function Discover() {
           }
         />
       )}
+      <AdBanner style={styles.adBanner} />
     </View>
   );
 }
@@ -435,6 +437,12 @@ function CourseRow({ course, onPress }: { course: any; onPress: () => void }) {
 
 const styles = makeThemedSheet((colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  adBanner: {
+    backgroundColor: colors.surfaceSecondary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.xs,
+  },
   headerSafe: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
   title: { fontSize: 26, fontWeight: '800', color: colors.onSurface, flexShrink: 1 },

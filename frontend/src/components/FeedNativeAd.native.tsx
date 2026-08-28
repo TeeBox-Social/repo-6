@@ -11,6 +11,7 @@ import mobileAds, {
 
 import { colors, radius, shadow, spacing } from '@/src/theme';
 import { AD_UNIT_IDS, ADS_SUPPORTED } from '@/src/config/adsConfig';
+import { usePremium } from '@/src/hooks/usePremium';
 
 /**
  * Initializes the Google Mobile Ads SDK once per app session.
@@ -39,9 +40,10 @@ export async function initAdMob(): Promise<void> {
 export function FeedNativeAd(): React.ReactElement | null {
   const [ad, setAd] = useState<NativeAd | null>(null);
   const [failed, setFailed] = useState(false);
+  const isPremium = usePremium();
 
   useEffect(() => {
-    if (!ADS_SUPPORTED) return;
+    if (!ADS_SUPPORTED || isPremium) return;
     let current: NativeAd | undefined;
     let cancelled = false;
 
@@ -63,9 +65,9 @@ export function FeedNativeAd(): React.ReactElement | null {
       cancelled = true;
       current?.destroy();
     };
-  }, []);
+  }, [isPremium]);
 
-  if (!ADS_SUPPORTED || failed || !ad) return null;
+  if (!ADS_SUPPORTED || failed || isPremium || !ad) return null;
 
   return (
     <NativeAdView nativeAd={ad} style={styles.card}>

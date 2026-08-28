@@ -13,6 +13,7 @@ export type User = {
   bio?: string;
   avatar?: string | null;
   is_admin?: boolean;
+  is_premium?: boolean;
   email_verified?: boolean;
   notification_prefs?: NotificationPrefs;
   public_group_ids?: string[];
